@@ -2,6 +2,8 @@ import Image from 'next/image'
 import styled from 'styled-components'
 import { random, shuffle } from 'lodash'
 
+import pokeball from '../public/images/pokeball.png'
+
 import { pokemonNames } from '../utils/pokemonNames'
 import { useState } from 'react'
 import NoSSR from './NoSSR'
@@ -13,16 +15,12 @@ const Wrapper = styled.div`
 `
 
 const PokemonWrapper = styled.div<{ hidden?: boolean }>`
+  position: relative;
   display: flex;
   background: #eee;
   border-radius: 50%;
   cursor: pointer;
   margin: 1em;
-
-  img {
-    filter: ${({ hidden }) => (hidden ? 'brightness(0)' : 'none')};
-    transition: cubic-bezier(0.175, 0.885, 0.32, 1.275) 0.5s;
-  }
 
   &:hover {
     img {
@@ -73,6 +71,31 @@ const Guess = styled(Button)<{ correct?: boolean }>`
   }
 `
 
+const PokemonImage = styled(Image)<{ isLoading?: boolean; isHidden?: boolean }>`
+  opacity: ${({ isLoading }) => (isLoading ? 0 : 1)};
+  filter: ${({ isHidden }) => (isHidden ? 'brightness(0)' : 'none')};
+`
+
+const Loading = styled.span`
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: pulse 0.5s ease-in-out infinite;
+
+  @keyframes pulse {
+    0% {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    50% {
+      transform: translate(-50%, -50%) scale(1.2);
+    }
+    100% {
+      transform: translate(-50%, -50%) scale(1);
+    }
+  }
+`
+
 const formatPokemonNumber = (number: number) => {
   if (number < 10) {
     return `00${number}`
@@ -102,8 +125,10 @@ const App = () => {
   const [nameHidden, setNameHidden] = useState(true)
   const [randomPokemon, setRandomPokemon] = useState(random(1, 905))
   const [options, setOptions] = useState(generateOptions(randomPokemon))
+  const [loading, setLoading] = useState(true)
 
   const reset = async () => {
+    setLoading(true)
     const newRandomPokemon = random(1, 905)
     setNameHidden(true)
     await sleep(150)
@@ -116,12 +141,20 @@ const App = () => {
       <Wrapper>
         <h1>Pokéguess</h1>
 
-        <PokemonWrapper hidden={nameHidden}>
-          <Image
+        <PokemonWrapper>
+          {loading && (
+            <Loading>
+              <Image src={pokeball} alt='loading' width={50} height={50} />
+            </Loading>
+          )}
+          <PokemonImage
             src={`${URL}/${formatPokemonNumber(randomPokemon)}.png`}
             alt='pokemon'
             width={300}
             height={300}
+            onLoad={() => setLoading(false)}
+            isLoading={loading}
+            isHidden={nameHidden}
           />
         </PokemonWrapper>
 
