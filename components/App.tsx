@@ -85,6 +85,8 @@ const App = () => {
     const randomNumber = random(1, 905)
     setRandomPokemon(randomNumber)
     setOptions(generateOptions(randomNumber))
+    localStorage.getItem('bestStreak') &&
+      setBestStreak(Number(localStorage.getItem('bestStreak')))
   }, [])
 
   const reset = async () => {
@@ -142,10 +144,12 @@ const App = () => {
                   setStreak(streak + 1)
                 } else {
                   setBestStreak(Math.max(streak, bestStreak))
+                  localStorage.setItem('bestStreak', String(bestStreak))
                   setStreak(0)
                 }
                 setIsHidden(false)
               }}
+              disabled={!isHidden}
               block
             >
               {pokemonNames[option - 1]}
