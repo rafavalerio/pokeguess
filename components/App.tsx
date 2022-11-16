@@ -1,12 +1,14 @@
+import { useState, useEffect } from 'react'
+
+import { Button, Space, Row, Col } from 'antd'
+import { random, shuffle } from 'lodash'
 import Image from 'next/image'
 import styled from 'styled-components'
-import { random, shuffle } from 'lodash'
 
 import pokeball from '../public/images/pokeball.png'
-
 import { pokemonNames } from '../utils/pokemonNames'
-import { useState } from 'react'
-import NoSSR from './NoSSR'
+
+import PokemonImage from './PokemonImage'
 
 const Wrapper = styled.div`
   display: flex;
@@ -33,49 +35,6 @@ const PokemonInfo = styled.div<{ blurred?: boolean }>`
   filter: ${({ blurred }) => (blurred ? 'blur(10px)' : 'none')};
 `
 
-const Options = styled.div`
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-
-  @media (min-width: 768px) {
-    grid-template-columns: repeat(4, 1fr);
-  }
-`
-
-const Actions = styled.div`
-  display: flex;
-  flex: 1;
-  margin: 1em;
-  align-items: center;
-`
-
-const Button = styled.button<{ primary?: boolean; small?: boolean }>`
-  padding: 0.8em 1em;
-  margin: 0.5em;
-  border-radius: 0.2em;
-  border: none;
-  background: ${(props) => (props.primary ? '#0af' : '#eee')};
-  cursor: pointer;
-  font-size: ${(props) => (props.small ? '0.9em' : '1em')};
-
-  &:hover {
-    background: ${(props) => (props.primary ? '#0cf' : '#ddd')};
-  }
-`
-
-const Guess = styled(Button)<{ correct?: boolean }>`
-  background: ${({ correct }) => (correct ? '#0f0' : '#eee')};
-
-  &:hover {
-    background: ${({ correct }) => (correct ? '#0f0' : '#ddd')};
-  }
-`
-
-const PokemonImage = styled(Image)<{ isLoading?: boolean; isHidden?: boolean }>`
-  opacity: ${({ isLoading }) => (isLoading ? 0 : 1)};
-  filter: ${({ isHidden }) => (isHidden ? 'brightness(0)' : 'none')};
-`
-
 const Loading = styled.span`
   position: absolute;
   top: 50%;
@@ -96,16 +55,6 @@ const Loading = styled.span`
   }
 `
 
-const formatPokemonNumber = (number: number) => {
-  if (number < 10) {
-    return `00${number}`
-  } else if (number < 100) {
-    return `0${number}`
-  } else {
-    return number
-  }
-}
-
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const generateOptions = (correctAnswer: number) => {
@@ -120,77 +69,87 @@ const generateOptions = (correctAnswer: number) => {
 }
 
 const App = () => {
-  const URL =
-    'https://raw.githubusercontent.com/rafavalerio/pokemon-sprites/master/images'
-  const [nameHidden, setNameHidden] = useState(true)
-  const [randomPokemon, setRandomPokemon] = useState(random(1, 905))
-  const [options, setOptions] = useState(generateOptions(randomPokemon))
+  const [isHidden, setIsHidden] = useState(true)
+  const [randomPokemon, setRandomPokemon] = useState<number | undefined>(
+    undefined
+  )
+  const [options, setOptions] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const randomNumber = random(1, 905)
+    setRandomPokemon(randomNumber)
+    setOptions(generateOptions(randomNumber))
+  }, [])
 
   const reset = async () => {
     setLoading(true)
     const newRandomPokemon = random(1, 905)
-    setNameHidden(true)
+    setIsHidden(true)
     await sleep(150)
     setRandomPokemon(newRandomPokemon)
     setOptions(generateOptions(newRandomPokemon))
   }
 
   return (
-    <NoSSR>
-      <Wrapper>
-        <h1>Pokéguess</h1>
+    <Wrapper>
+      <h1>Pokéguess</h1>
 
-        <PokemonWrapper>
-          {loading && (
-            <Loading>
-              <Image src={pokeball} alt='loading' width={50} height={50} />
-            </Loading>
-          )}
+      <PokemonWrapper>
+        {loading && (
+          <Loading>
+            <Image src={pokeball} alt='loading' width={50} height={50} />
+          </Loading>
+        )}
+        {randomPokemon && (
           <PokemonImage
-            src={`${URL}/${formatPokemonNumber(randomPokemon)}.png`}
-            alt='pokemon'
-            width={300}
-            height={300}
+            number={randomPokemon}
             onLoad={() => setLoading(false)}
-            isLoading={loading}
-            isHidden={nameHidden}
+            loading={loading}
+            isHidden={isHidden}
           />
-        </PokemonWrapper>
+        )}
+      </PokemonWrapper>
 
-        <PokemonInfo blurred={nameHidden}>
+      {randomPokemon && (
+        <PokemonInfo blurred={isHidden}>
           <h1>
             #{randomPokemon} | {pokemonNames[randomPokemon - 1]}
           </h1>
         </PokemonInfo>
+      )}
 
-        <Options>
-          {options.map((option) => (
-            <Guess
-              key={option}
-              small
+      <Row
+        gutter={[8, 8]}
+        justify='center'
+        align='middle'
+        style={{ margin: 10 }}
+      >
+        {options.map((option) => (
+          <Col key={option} span={12}>
+            <Button
               onClick={() => {
                 if (option === randomPokemon) {
-                  setNameHidden(false)
+                  setIsHidden(false)
                 }
               }}
-              correct={option === randomPokemon && !nameHidden}
+              block
             >
               {pokemonNames[option - 1]}
-            </Guess>
-          ))}
-        </Options>
+            </Button>
+          </Col>
+        ))}
+      </Row>
 
-        <Actions>
-          <Button onClick={() => reset()} primary>
-            NEXT
-          </Button>
-          <Button onClick={() => setNameHidden(false)} disabled={!nameHidden}>
-            REVEAL
-          </Button>
-        </Actions>
-      </Wrapper>
-    </NoSSR>
+      <Space size='middle' style={{ margin: 15 }}>
+        <Button onClick={() => setIsHidden(false)} disabled={!isHidden}>
+          REVEAL
+        </Button>
+        <Button onClick={() => reset()} type='primary'>
+          NEXT
+        </Button>
+      </Space>
+    </Wrapper>
   )
 }
 

@@ -1,5 +1,7 @@
 import Head from 'next/head'
+
 import App from '../components/App'
+import 'antd/dist/antd.css'
 
 const Home = () => {
   return (
