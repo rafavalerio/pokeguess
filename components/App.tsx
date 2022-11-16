@@ -143,8 +143,9 @@ const App = () => {
                 if (option === randomPokemon) {
                   setStreak(streak + 1)
                 } else {
-                  setBestStreak(Math.max(streak, bestStreak))
-                  localStorage.setItem('bestStreak', String(bestStreak))
+                  const newBestStreak = Math.max(streak, bestStreak)
+                  setBestStreak(newBestStreak)
+                  localStorage.setItem('bestStreak', String(newBestStreak))
                   setStreak(0)
                 }
                 setIsHidden(false)
