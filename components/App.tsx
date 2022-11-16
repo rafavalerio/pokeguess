@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 
-import { Button, Space, Row, Col } from 'antd'
+import { Button, Space, Row, Col, Typography } from 'antd'
 import { random, shuffle } from 'lodash'
 import Image from 'next/image'
 import styled from 'styled-components'
 
+import background from '../public/images/dot.png'
 import pokeball from '../public/images/pokeball.png'
 import { pokemonNames } from '../utils/pokemonNames'
 
@@ -14,6 +15,8 @@ const Wrapper = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
+  background: ${`url(${background.src}) repeat`};
+  height: 100vh;
 `
 
 const PokemonWrapper = styled.div<{ hidden?: boolean }>`
@@ -75,6 +78,8 @@ const App = () => {
   )
   const [options, setOptions] = useState<number[]>([])
   const [loading, setLoading] = useState(true)
+  const [streak, setStreak] = useState(0)
+  const [bestStreak, setBestStreak] = useState(0)
 
   useEffect(() => {
     const randomNumber = random(1, 905)
@@ -93,7 +98,11 @@ const App = () => {
 
   return (
     <Wrapper>
-      <h1>Pokéguess</h1>
+      <Typography.Title>Pokéguess</Typography.Title>
+      <Space>
+        <Typography.Text>Streak: {streak}</Typography.Text>|
+        <Typography.Text>Best Streak: {bestStreak}</Typography.Text>
+      </Space>
 
       <PokemonWrapper>
         {loading && (
@@ -130,8 +139,12 @@ const App = () => {
             <Button
               onClick={() => {
                 if (option === randomPokemon) {
-                  setIsHidden(false)
+                  setStreak(streak + 1)
+                } else {
+                  setBestStreak(Math.max(streak, bestStreak))
+                  setStreak(0)
                 }
+                setIsHidden(false)
               }}
               block
             >
@@ -142,9 +155,6 @@ const App = () => {
       </Row>
 
       <Space size='middle' style={{ margin: 15 }}>
-        <Button onClick={() => setIsHidden(false)} disabled={!isHidden}>
-          REVEAL
-        </Button>
         <Button onClick={() => reset()} type='primary'>
           NEXT
         </Button>
