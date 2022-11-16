@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
-import { Button, Space, Row, Col, Typography } from 'antd'
+import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { Button, Space, Row, Col, Typography, Tag } from 'antd'
 import { random, shuffle } from 'lodash'
 import Image from 'next/image'
 import styled from 'styled-components'
@@ -36,6 +37,13 @@ const PokemonWrapper = styled.div<{ hidden?: boolean }>`
 
 const PokemonInfo = styled.div<{ blurred?: boolean }>`
   filter: ${({ blurred }) => (blurred ? 'blur(10px)' : 'none')};
+`
+
+const GuessTag = styled(Tag)`
+  padding: 0.4em 0.8em;
+  display: block;
+  text-align: center;
+  font-size: 0.9em;
 `
 
 const Loading = styled.span`
@@ -138,23 +146,41 @@ const App = () => {
       >
         {options.map((option) => (
           <Col key={option} span={12}>
-            <Button
-              onClick={() => {
-                if (option === randomPokemon) {
-                  setStreak(streak + 1)
-                } else {
-                  const newBestStreak = Math.max(streak, bestStreak)
-                  setBestStreak(newBestStreak)
-                  localStorage.setItem('bestStreak', String(newBestStreak))
-                  setStreak(0)
-                }
-                setIsHidden(false)
-              }}
-              disabled={!isHidden}
-              block
-            >
-              {pokemonNames[option - 1]}
-            </Button>
+            {!isHidden ? (
+              option === randomPokemon ? (
+                <GuessTag
+                  color={option === randomPokemon ? 'lime' : 'red'}
+                  icon={<CheckCircleOutlined />}
+                >
+                  {pokemonNames[option - 1]}
+                </GuessTag>
+              ) : (
+                <GuessTag
+                  color={option === randomPokemon ? 'lime' : 'red'}
+                  icon={<CloseCircleOutlined />}
+                >
+                  {pokemonNames[option - 1]}
+                </GuessTag>
+              )
+            ) : (
+              <Button
+                onClick={() => {
+                  if (option === randomPokemon) {
+                    setStreak(streak + 1)
+                  } else {
+                    const newBestStreak = Math.max(streak, bestStreak)
+                    setBestStreak(newBestStreak)
+                    localStorage.setItem('bestStreak', String(newBestStreak))
+                    setStreak(0)
+                  }
+                  setIsHidden(false)
+                }}
+                disabled={!isHidden}
+                block
+              >
+                {pokemonNames[option - 1]}
+              </Button>
+            )}
           </Col>
         ))}
       </Row>
