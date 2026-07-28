@@ -116,7 +116,7 @@ const Game = () => {
         disabled={!revealed}
         className="bg-shell focus-visible:ring-shell mt-4 w-full rounded-lg py-2.5 text-sm font-medium text-button transition-opacity focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
       >
-        Next
+        {revealed && state.guess !== state.dex ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )

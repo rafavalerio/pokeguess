@@ -30,7 +30,10 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
   }, [roundId, onReady])
 
   return (
-    <div className="bg-screen-sunk relative mx-auto flex size-48 items-center justify-center rounded-full sm:size-56">
+    <div
+      className="bg-screen-sunk relative mx-auto flex size-48 select-none items-center justify-center rounded-full [-webkit-touch-callout:none] sm:size-56"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {loading && (
         <Image
           src="/images/pokeball.png"
@@ -41,6 +44,14 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
           className="absolute size-10 animate-pulse select-none"
         />
       )}
+      {/*
+        The hidden state is only a CSS filter over the real sprite, so any
+        browser affordance that renders the raw image — long-press callout,
+        drag preview, selection highlight, "open image in new tab" — leaks the
+        answer. `pointer-events-none` stops the sprite receiving those gestures
+        at all; the rest are belt-and-braces for engines that treat callout and
+        native drag separately from pointer events.
+      */}
       <Image
         ref={ref}
         key={roundId}
@@ -52,7 +63,7 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
         draggable={false}
         onLoad={onReady}
         onError={onReady}
-        className={`size-40 select-none transition-[filter] duration-300 sm:size-48 ${
+        className={`pointer-events-none size-40 select-none [-webkit-touch-callout:none] [-webkit-user-drag:none] transition-[filter] duration-300 sm:size-48 ${
           revealed ? 'brightness-100' : 'brightness-0'
         } ${loading ? 'opacity-0' : 'opacity-100'}`}
       />

@@ -51,6 +51,36 @@ describe('Game', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
 
+  it('labels the advance button "Start again" after a wrong guess', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const wrong = screen
+      .getAllByRole('button')
+      .find(
+        (b) =>
+          b.textContent !== getPokemonName(453) &&
+          b.textContent !== 'Next' &&
+          b.textContent !== 'Start again',
+      )!
+    await user.click(wrong)
+
+    expect(screen.getByRole('button', { name: 'Start again' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the advance button labelled "Next" after a correct guess', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: getPokemonName(453) }))
+
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+    expect(
+      screen.queryByRole('button', { name: 'Start again' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('persists the best streak to localStorage on a correct guess', async () => {
     const user = userEvent.setup()
     render(<Game />)
