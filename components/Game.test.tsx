@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import Game from './Game'
 import { getPokemonName } from '@/lib/pokemon'
 
+// Lets a test hold the sprite in its loading state by withholding the load
+// event, which is otherwise fired immediately on mount.
+const imageLoading = vi.hoisted(() => ({ neverLoads: false }))
+
 vi.mock('next/image', async () => {
   const { useEffect } = await import('react')
   const MockImage = ({ onLoad, alt }: { onLoad?: () => void; alt: string }) => {
@@ -14,7 +18,7 @@ vi.mock('next/image', async () => {
     // change), matching browser behaviour closely enough to catch bugs where
     // a round fails to produce a fresh element.
     useEffect(() => {
-      onLoad?.()
+      if (!imageLoading.neverLoads) onLoad?.()
       // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally mount-only, see comment above
     }, [])
     // eslint-disable-next-line @next/next/no-img-element -- test stub, not real image usage
@@ -38,6 +42,20 @@ describe('Game', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
+    imageLoading.neverLoads = false
+  })
+
+  it('hides the options until the sprite has loaded', () => {
+    imageLoading.neverLoads = true
+    render(<Game />)
+
+    // No option name is readable while the silhouette is still loading, so the
+    // answer cannot be guessed from the shortlist before it is visible.
+    for (const dex of [453, 1, 2, 3]) {
+      expect(screen.queryByText(getPokemonName(dex))).not.toBeInTheDocument()
+    }
+    // The grid's footprint is still reserved, so nothing shifts on load.
+    expect(screen.getAllByRole('button')).toHaveLength(5)
   })
 
   it('reveals the answer and scores a streak of 1 on a correct guess', async () => {

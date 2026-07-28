@@ -97,7 +97,7 @@ const Game = () => {
         {revealed ? `#${state.dex} · ${getPokemonName(state.dex)}` : ' '}
       </p>
 
-      {mounted ? (
+      {mounted && state.status !== 'loading' ? (
         <GuessGrid
           options={state.options}
           answer={state.dex}

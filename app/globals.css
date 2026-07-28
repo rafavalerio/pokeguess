@@ -20,6 +20,32 @@
   --color-lamp-blue: #6fb2e8;
   --color-lamp-amber: #f0b23c;
   --color-lamp-green: #7fc45a;
+
+  --animate-pokeball-spin: pokeball-spin 1.8s cubic-bezier(0.7, 0, 0.3, 1) infinite;
+}
+
+/*
+  Two full turns that accelerate from rest and decelerate back to rest, then
+  hold still before repeating. The easing curve does the ramp; the 72%-100%
+  plateau is the pause between spins. Keeping the rotation a whole multiple of
+  360deg means the ball comes to rest in its starting orientation every cycle.
+*/
+@keyframes pokeball-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  72% {
+    transform: rotate(720deg);
+  }
+  100% {
+    transform: rotate(720deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*='animate-pokeball-spin'] {
+    animation: none;
+  }
 }
 
 html,

@@ -41,7 +41,7 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
           aria-hidden="true"
           width={48}
           height={48}
-          className="absolute size-10 animate-pulse select-none"
+          className="animate-pokeball-spin pointer-events-none absolute size-10 select-none"
         />
       )}
       {/*
