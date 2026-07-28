@@ -46,4 +46,29 @@ describe('Game', () => {
 
     expect(localStorage.getItem('bestStreak')).toBe('1')
   })
+
+  it('does not lower a stored best streak on a wrong guess', async () => {
+    localStorage.setItem('bestStreak', '7')
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerName = getPokemonName(453)
+    const options = await screen.findAllByRole('button', { name: /.+/ })
+    const wrongOption = options.find(
+      (option) => option.textContent !== 'Next' && option.textContent !== answerName,
+    )
+    if (!wrongOption) throw new Error('Expected at least one wrong option to be rendered')
+    await user.click(wrongOption)
+
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
+    expect(screen.getByTestId('stat-best')).toHaveTextContent('7')
+    expect(localStorage.getItem('bestStreak')).toBe('7')
+  })
+
+  it('hydrates and displays a stored best streak on mount', async () => {
+    localStorage.setItem('bestStreak', '12')
+    render(<Game />)
+
+    expect(await screen.findByTestId('stat-best')).toHaveTextContent('12')
+  })
 })
