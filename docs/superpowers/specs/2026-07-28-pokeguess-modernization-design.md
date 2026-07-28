@@ -35,9 +35,9 @@ fix during the rewrite than to port forward deliberately.
 
 | Concern | From | To |
 | --- | --- | --- |
-| Framework | next 13.0.3, Pages Router | next 15.x, App Router |
-| UI runtime | react 18.2.0 | react 19.x |
-| Language | typescript 4.8.4 | typescript 5.x |
+| Framework | next 13.0.3, Pages Router | next 16.2.12, App Router |
+| UI runtime | react 18.2.0 | react 19.2.8 |
+| Language | typescript 4.8.4 | typescript 7.0.2 |
 | Components | antd ^4.24.2 | none (hand-built) |
 | Styling | styled-components ^5.3.6 | Tailwind v4 |
 | Utilities | lodash ^4.17.21 | none (local helpers) |
@@ -73,6 +73,11 @@ under test, which a lodash dependency actively prevents.
 - `next.config.js` replaces the deprecated `images.domains` with
   `images.remotePatterns` for `raw.githubusercontent.com`.
 - Tailwind v4 requires Node 20+. The dev machine runs Node 22.16.0.
+- ESLint 10 supports flat config only. `.eslintrc.json` is deleted and replaced
+  by `eslint.config.mjs`; `eslint-config-next@16` exports `Linter.Config[]`
+  arrays for this purpose.
+- `next lint` no longer exists in Next 16. The `lint` script calls `eslint`
+  directly.
 
 ## Architecture
 
