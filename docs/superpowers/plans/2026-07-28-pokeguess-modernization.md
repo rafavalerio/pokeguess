@@ -636,6 +636,7 @@ Tailwind v4 is CSS-first: `@theme` declarations become utility classes automatic
 
   --color-screen: #f7f4ee;
   --color-screen-sunk: #e9e4d9;
+  --color-button: #ffffff;
 
   --color-ink: #2c2c2a;
   --color-ink-soft: #6f6d66;
@@ -824,6 +825,7 @@ import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 
 import formatDexNumber from '@/lib/formatDexNumber'
+import { getPokemonName } from '@/lib/pokemon'
 
 const SPRITE_BASE =
   'https://raw.githubusercontent.com/rafavalerio/pokemon-sprites/master/images'
@@ -847,7 +849,11 @@ const PokemonSilhouette = ({ dex, revealed, onReady }: Props) => {
         ref={ref}
         key={dex}
         src={`${SPRITE_BASE}/${formatDexNumber(dex)}.png`}
-        alt={revealed ? `Pokémon number ${dex}` : 'Hidden Pokémon silhouette'}
+        alt={
+          revealed
+            ? `${getPokemonName(dex)}, number ${dex}`
+            : 'Hidden Pokémon silhouette'
+        }
         width={192}
         height={192}
         priority
@@ -879,7 +885,7 @@ import { getPokemonName } from '@/lib/pokemon'
 export type GuessState = 'idle' | 'correct' | 'wrong'
 
 const styles: Record<GuessState, string> = {
-  idle: 'bg-white text-ink border-screen-sunk hover:border-shell hover:bg-screen-sunk',
+  idle: 'bg-button text-ink border-screen-sunk hover:border-shell hover:bg-screen-sunk',
   correct: 'bg-correct text-correct-ink border-correct',
   wrong: 'bg-wrong text-wrong-ink border-wrong',
 }
