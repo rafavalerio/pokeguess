@@ -24,11 +24,16 @@ const SilhouettePlaceholder = () => (
   <div className="bg-screen-sunk mx-auto flex size-48 items-center justify-center rounded-full sm:size-56" />
 )
 
+// Each slot holds a skeleton bar rather than sitting empty: four blank boxes
+// read as broken, where a bar reads as "not ready yet". The bar sits inside
+// the same button box, so the slot keeps the exact height of the loaded state.
 const GuessGridPlaceholder = () => (
   <div className="grid grid-cols-2 gap-2">
     {[0, 1, 2, 3].map((slot) => (
       <button key={slot} type="button" disabled className={guessButtonClassName('idle')}>
-        {' '}
+        <span className="flex h-5 items-center">
+          <span className="bg-screen-sunk block h-2.5 w-16 animate-pulse rounded-full" />
+        </span>
       </button>
     ))}
   </div>

@@ -42,9 +42,20 @@
   }
 }
 
+/*
+  Covers every animation and transition, not just the pokeball spin: the
+  loading skeleton pulses and the sprite reveal transitions too, and a reader
+  who asked for reduced motion wants all of it stilled. Near-zero rather than
+  `none` so animationend/transitionend listeners still fire.
+*/
 @media (prefers-reduced-motion: reduce) {
-  [class*='animate-pokeball-spin'] {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
