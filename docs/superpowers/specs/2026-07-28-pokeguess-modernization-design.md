@@ -73,9 +73,11 @@ under test, which a lodash dependency actively prevents.
 - `next.config.js` replaces the deprecated `images.domains` with
   `images.remotePatterns` for `raw.githubusercontent.com`.
 - Tailwind v4 requires Node 20+. The dev machine runs Node 22.16.0.
-- ESLint 10 supports flat config only. `.eslintrc.json` is deleted and replaced
-  by `eslint.config.mjs`; `eslint-config-next@16` exports `Linter.Config[]`
-  arrays for this purpose.
+- `.eslintrc.json` is deleted and replaced by flat config in `eslint.config.mjs`;
+  `eslint-config-next@16` exports `Linter.Config[]` arrays for this purpose.
+- ESLint is pinned to **9.39.5**, not 10.x. Every plugin `eslint-config-next@16`
+  bundles declares peer `eslint ... || ^9`; under ESLint 10 the run dies with
+  `TypeError: scopeManager.addGlobals is not a function`.
 - `next lint` no longer exists in Next 16. The `lint` script calls `eslint`
   directly.
 
@@ -255,3 +257,21 @@ is still open upstream (typescript-eslint issue #10940).
 The project pins `typescript@6.0.3`. This codebase uses no TypeScript 7 features,
 so the only cost is being one major behind, and it keeps the lint gate — including
 `next/core-web-vitals` accessibility and image rules — working.
+
+## Amendment 2026-07-28: ESLint 9, not 10
+
+The same class of problem as the TypeScript pin. `eslint-config-next@16.2.12`
+bundles `eslint-plugin-react`, `eslint-plugin-import`, `eslint-plugin-jsx-a11y`,
+`eslint-plugin-react-hooks` and `typescript-eslint`, and every one of them
+declares a peer range topping out at `^9`. Installed against `eslint@10.8.0` the
+lint run crashes in ESLint's own `source-code.js` with
+`TypeError: scopeManager.addGlobals is not a function`.
+
+The project pins `eslint@9.39.5` (npm's `maintenance` dist-tag). Verified: lint
+executes and reports normally.
+
+**Lesson recorded for the remaining tasks:** "latest stable on npm" is not the
+same as "the version this framework's plugin ecosystem supports". Both the
+TypeScript and ESLint pins in the original plan were chosen from the registry's
+`latest` tag without checking the peer ranges of what Next actually bundles.
+Remaining version choices are checked against consumers before being pinned.

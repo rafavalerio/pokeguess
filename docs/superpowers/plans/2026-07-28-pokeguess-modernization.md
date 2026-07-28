@@ -6,7 +6,7 @@
 
 **Architecture:** All game rules live in `lib/game.ts` as pure functions plus a reducer, with the random number generator injected so tests are deterministic. React components are thin: `Game` owns the reducer and composes five presentational components that receive props and render. Styling is Tailwind utility classes with design tokens declared in an `@theme` block; no CSS-in-JS runtime.
 
-**Tech Stack:** next 16.2.12, react 19.2.8, typescript 6.0.3, tailwindcss 4.3.3, lucide-react 1.27.0, vitest 4.1.10, @testing-library/react 16.3.2, jsdom 30.0.0, eslint 10.8.0
+**Tech Stack:** next 16.2.12, react 19.2.8, typescript 6.0.3, tailwindcss 4.3.3, lucide-react 1.27.0, vitest 4.1.10, @testing-library/react 16.3.2, jsdom 30.0.0, eslint 9.39.5
 
 ## Global Constraints
 
@@ -81,7 +81,7 @@ Note `next lint` is gone in Next 16 — `lint` calls `eslint` directly.
     "@types/react": "19.2.17",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.4",
-    "eslint": "10.8.0",
+    "eslint": "9.39.5",
     "eslint-config-next": "16.2.12",
     "jsdom": "30.0.0",
     "tailwindcss": "4.3.3",
@@ -93,15 +93,22 @@ Note `next lint` is gone in Next 16 — `lint` calls `eslint` directly.
 
 - [ ] **Step 3: Write `eslint.config.mjs`**
 
-ESLint 10 is flat-config only. `eslint-config-next/core-web-vitals` exports a `Linter.Config[]` array, so spread it.
+ESLint 9 is flat-config capable and is what `eslint-config-next@16` actually
+supports — every plugin it bundles declares peer `eslint ... || ^9` and none
+accept ESLint 10, which crashes with `scopeManager.addGlobals is not a function`.
+`eslint-config-next/core-web-vitals` exports a `Linter.Config[]` array, so spread
+it. Assign to a named const before exporting, or `import/no-anonymous-default-export`
+warns.
 
 ```js
 import next from 'eslint-config-next/core-web-vitals'
 
-export default [
+const config = [
   { ignores: ['.next/**', 'node_modules/**', 'next-env.d.ts'] },
   ...next,
 ]
+
+export default config
 ```
 
 - [ ] **Step 4: Write `postcss.config.mjs`**
@@ -109,9 +116,11 @@ export default [
 Tailwind v4 moved its PostCSS plugin into a separate package.
 
 ```js
-export default {
+const config = {
   plugins: { '@tailwindcss/postcss': {} },
 }
+
+export default config
 ```
 
 - [ ] **Step 5: Write `vitest.config.ts`**
