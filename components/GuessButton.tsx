@@ -5,7 +5,7 @@ import { getPokemonName } from '@/lib/pokemon'
 export type GuessState = 'idle' | 'correct' | 'wrong'
 
 const styles: Record<GuessState, string> = {
-  idle: 'bg-white text-ink border-screen-sunk hover:border-shell hover:bg-screen-sunk',
+  idle: 'bg-button text-ink border-screen-sunk hover:border-shell hover:bg-screen-sunk',
   correct: 'bg-correct text-correct-ink border-correct',
   wrong: 'bg-wrong text-wrong-ink border-wrong',
 }

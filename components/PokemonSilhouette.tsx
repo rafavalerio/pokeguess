@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 
 import formatDexNumber from '@/lib/formatDexNumber'
+import { getPokemonName } from '@/lib/pokemon'
 
 const SPRITE_BASE =
   'https://raw.githubusercontent.com/rafavalerio/pokemon-sprites/master/images'
@@ -27,7 +28,7 @@ const PokemonSilhouette = ({ dex, revealed, onReady }: Props) => {
         ref={ref}
         key={dex}
         src={`${SPRITE_BASE}/${formatDexNumber(dex)}.png`}
-        alt={revealed ? `Pokémon number ${dex}` : 'Hidden Pokémon silhouette'}
+        alt={revealed ? `${getPokemonName(dex)}, number ${dex}` : 'Hidden Pokémon silhouette'}
         width={192}
         height={192}
         priority
