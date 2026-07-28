@@ -43,6 +43,12 @@ export type GameState = {
   guess: number | null
   streak: number
   bestStreak: number | null
+  // Monotonically incrementing per round. A repeat dex draw (roughly 1 in
+  // MAX_DEX chance) leaves `dex` unchanged across NEXT, which would otherwise
+  // give consuming components (PokemonSilhouette) no signal that a new round
+  // started. `roundId` always changes on NEXT regardless of which dex was
+  // drawn, so it — not `dex` — is the correct thing to key a fresh element on.
+  roundId: number
 }
 
 export type GameAction =
@@ -60,6 +66,7 @@ export const createInitialState = (rng: Rng): GameState => ({
   ...startRound(rng),
   streak: 0,
   bestStreak: null,
+  roundId: 0,
 })
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -81,7 +88,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
 
     case 'NEXT':
-      return { ...state, ...startRound(action.rng) }
+      return { ...state, ...startRound(action.rng), roundId: state.roundId + 1 }
 
     case 'HYDRATE_BEST':
       return { ...state, bestStreak: Math.max(action.bestStreak, state.bestStreak ?? 0) }

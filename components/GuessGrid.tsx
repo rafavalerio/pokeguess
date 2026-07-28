@@ -5,6 +5,7 @@ type Props = {
   answer: number
   guess: number | null
   revealed: boolean
+  disabled: boolean
   onGuess: (dex: number) => void
 }
 
@@ -19,14 +20,14 @@ const stateFor = (
   return dex === guess ? 'wrong' : 'idle'
 }
 
-const GuessGrid = ({ options, answer, guess, revealed, onGuess }: Props) => (
+const GuessGrid = ({ options, answer, guess, revealed, disabled, onGuess }: Props) => (
   <div className="grid grid-cols-2 gap-2">
     {options.map((dex) => (
       <GuessButton
         key={dex}
         dex={dex}
         state={stateFor(dex, answer, guess, revealed)}
-        disabled={revealed}
+        disabled={disabled}
         onClick={() => onGuess(dex)}
       />
     ))}

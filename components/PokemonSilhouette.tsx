@@ -11,22 +11,39 @@ const SPRITE_BASE =
 
 type Props = {
   dex: number
-  revealed: boolean
+  roundId: number
+  status: 'loading' | 'guessing' | 'revealed'
   onReady: () => void
 }
 
-const PokemonSilhouette = ({ dex, revealed, onReady }: Props) => {
+const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
   const ref = useRef<HTMLImageElement>(null)
+  const revealed = status === 'revealed'
+  const loading = status === 'loading'
 
+  // Keyed and re-run on `roundId`, not `dex`: a repeat dex draw across NEXT
+  // would otherwise leave both unchanged, so the <img> would never remount
+  // and no load event (nor this effect) would ever fire again, stranding the
+  // round in 'loading' forever.
   useEffect(() => {
     if (ref.current?.complete) onReady()
-  }, [dex, onReady])
+  }, [roundId, onReady])
 
   return (
-    <div className="bg-screen-sunk mx-auto flex size-48 items-center justify-center rounded-full sm:size-56">
+    <div className="bg-screen-sunk relative mx-auto flex size-48 items-center justify-center rounded-full sm:size-56">
+      {loading && (
+        <Image
+          src="/images/pokeball.png"
+          alt=""
+          aria-hidden="true"
+          width={48}
+          height={48}
+          className="absolute size-10 animate-pulse select-none"
+        />
+      )}
       <Image
         ref={ref}
-        key={dex}
+        key={roundId}
         src={`${SPRITE_BASE}/${formatDexNumber(dex)}.png`}
         alt={revealed ? `${getPokemonName(dex)}, number ${dex}` : 'Hidden Pokémon silhouette'}
         width={192}
@@ -37,7 +54,7 @@ const PokemonSilhouette = ({ dex, revealed, onReady }: Props) => {
         onError={onReady}
         className={`size-40 select-none transition-[filter] duration-300 sm:size-48 ${
           revealed ? 'brightness-100' : 'brightness-0'
-        }`}
+        } ${loading ? 'opacity-0' : 'opacity-100'}`}
       />
     </div>
   )

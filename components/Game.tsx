@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useReducer, useSyncExternalStore } from 'react'
 
+import { guessButtonClassName } from './GuessButton'
 import GuessGrid from './GuessGrid'
 import PokedexShell from './PokedexShell'
 import PokemonSilhouette from './PokemonSilhouette'
@@ -26,12 +27,7 @@ const SilhouettePlaceholder = () => (
 const GuessGridPlaceholder = () => (
   <div className="grid grid-cols-2 gap-2">
     {[0, 1, 2, 3].map((slot) => (
-      <button
-        key={slot}
-        type="button"
-        disabled
-        className="border-screen-sunk bg-button text-ink flex items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-sm disabled:cursor-default"
-      >
+      <button key={slot} type="button" disabled className={guessButtonClassName('idle')}>
         {' '}
       </button>
     ))}
@@ -51,15 +47,24 @@ const Game = () => {
   const mounted = useMounted()
 
   useEffect(() => {
-    const stored = Number(localStorage.getItem(BEST_STREAK_KEY))
-    if (Number.isFinite(stored) && stored > 0) {
-      dispatch({ type: 'HYDRATE_BEST', bestStreak: stored })
+    try {
+      const stored = Number(localStorage.getItem(BEST_STREAK_KEY))
+      if (Number.isFinite(stored) && stored > 0) {
+        dispatch({ type: 'HYDRATE_BEST', bestStreak: Math.floor(stored) })
+      }
+    } catch {
+      // localStorage can throw (e.g. SecurityError when site data is
+      // blocked); the game is still playable without a persisted best streak.
     }
   }, [])
 
   useEffect(() => {
     if (state.bestStreak !== null) {
-      localStorage.setItem(BEST_STREAK_KEY, String(state.bestStreak))
+      try {
+        localStorage.setItem(BEST_STREAK_KEY, String(state.bestStreak))
+      } catch {
+        // See the read effect above: persistence is best-effort.
+      }
     }
   }, [state.bestStreak])
 
@@ -77,7 +82,12 @@ const Game = () => {
 
       <div className="mb-3">
         {mounted ? (
-          <PokemonSilhouette dex={state.dex} revealed={revealed} onReady={handleReady} />
+          <PokemonSilhouette
+            dex={state.dex}
+            roundId={state.roundId}
+            status={state.status}
+            onReady={handleReady}
+          />
         ) : (
           <SilhouettePlaceholder />
         )}
@@ -93,6 +103,7 @@ const Game = () => {
           answer={state.dex}
           guess={state.guess}
           revealed={revealed}
+          disabled={state.status !== 'guessing'}
           onGuess={(dex) => dispatch({ type: 'GUESS', dex })}
         />
       ) : (

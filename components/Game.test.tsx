@@ -8,9 +8,15 @@ import { getPokemonName } from '@/lib/pokemon'
 vi.mock('next/image', async () => {
   const { useEffect } = await import('react')
   const MockImage = ({ onLoad, alt }: { onLoad?: () => void; alt: string }) => {
+    // A real browser fires `load` once per mounted <img> element, not once
+    // per render. An effect with an empty dep array mirrors that: it only
+    // re-fires when this component instance remounts (e.g. on a `key`
+    // change), matching browser behaviour closely enough to catch bugs where
+    // a round fails to produce a fresh element.
     useEffect(() => {
       onLoad?.()
-    }, [onLoad])
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally mount-only, see comment above
+    }, [])
     // eslint-disable-next-line @next/next/no-img-element -- test stub, not real image usage
     return <img alt={alt} />
   }
@@ -20,6 +26,13 @@ vi.mock('next/image', async () => {
 describe('Game', () => {
   beforeEach(() => {
     localStorage.clear()
+    // Pinning Math.random to a constant value also means generateOptions's
+    // random-draw loop exhausts its guard every round (see lib/game.ts) and
+    // falls back to its deterministic sequential fill. The "wrong" option
+    // these tests click is therefore always a low, fallback-filled dex, not
+    // a genuine random draw — harmless for what these tests assert, but
+    // worth knowing so the fixed set of option names here doesn't look like
+    // a mistake.
     vi.spyOn(Math, 'random').mockReturnValue(0.5)
   })
 
@@ -70,5 +83,29 @@ describe('Game', () => {
     render(<Game />)
 
     expect(await screen.findByTestId('stat-best')).toHaveTextContent('12')
+  })
+
+  it('stays playable across NEXT when the same Pokémon is drawn twice in a row', async () => {
+    // Math.random is pinned to 0.5 for every call in this test file, so every
+    // round draws the same dex (453). This reproduces the exact scenario a
+    // real ~1-in-905 repeat draw would hit: if the round's identity is keyed
+    // on `dex` instead of a value that changes every NEXT, the silhouette
+    // never remounts, no load event fires, and the round is stuck in
+    // 'loading' forever — GUESS is rejected and Next stays disabled.
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerName = getPokemonName(453)
+    await user.click(screen.getByRole('button', { name: answerName }))
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
+
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // If the round is stuck in 'loading', the answer button is disabled and
+    // this click is silently dropped instead of scoring.
+    await user.click(await screen.findByRole('button', { name: answerName }))
+
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
 })

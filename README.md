@@ -30,9 +30,11 @@ number generator injected so the tests are deterministic. `components/Game.tsx`
 owns the reducer and composes the presentational components around it; those
 components hold no game state of their own.
 
-The first round is drawn on the client via `useSyncExternalStore`, not during
-render. Drawing it during render would make the server and the browser pick
-different Pokémon and produce a hydration mismatch.
+The first round is drawn during render, inside `useReducer`'s lazy
+initializer — and that happens identically on the server and the client, so it
+draws a different Pokémon in each place. Nothing derived from that draw is
+rendered until after mount; `useSyncExternalStore` provides the SSR-safe
+mounted flag that gates it, avoiding a hydration mismatch.
 
 Sprites for dex 1–905 are served from
 [rafavalerio/pokemon-sprites](https://github.com/rafavalerio/pokemon-sprites).
