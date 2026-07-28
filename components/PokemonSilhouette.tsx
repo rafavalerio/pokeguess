@@ -34,16 +34,21 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
       className="bg-screen-sunk relative mx-auto flex size-48 select-none items-center justify-center rounded-full [-webkit-touch-callout:none] sm:size-56"
       onContextMenu={(e) => e.preventDefault()}
     >
-      {loading && (
-        <Image
-          src="/images/pokeball.png"
-          alt=""
-          aria-hidden="true"
-          width={48}
-          height={48}
-          className="animate-pokeball-spin pointer-events-none absolute size-10 select-none"
-        />
-      )}
+      {/*
+        Kept mounted rather than unmounted on load, so it can fade out while
+        the sprite pops in instead of blinking out of existence. The spin is
+        only applied while loading, so an invisible ball is not animating.
+      */}
+      <Image
+        src="/images/pokeball.png"
+        alt=""
+        aria-hidden="true"
+        width={48}
+        height={48}
+        className={`pointer-events-none absolute size-10 select-none transition-opacity duration-200 ${
+          loading ? 'animate-pokeball-spin opacity-100' : 'opacity-0'
+        }`}
+      />
       {/*
         The hidden state is only a CSS filter over the real sprite, so any
         browser affordance that renders the raw image — long-press callout,
@@ -65,7 +70,7 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
         onError={onReady}
         className={`pointer-events-none size-40 select-none [-webkit-touch-callout:none] [-webkit-user-drag:none] transition-[filter] duration-300 sm:size-48 ${
           revealed ? 'brightness-100' : 'brightness-0'
-        } ${loading ? 'opacity-0' : 'opacity-100'}`}
+        } ${loading ? 'opacity-0' : 'animate-sprite-pop opacity-100'}`}
       />
     </div>
   )

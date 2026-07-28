@@ -22,6 +22,28 @@
   --color-lamp-green: #7fc45a;
 
   --animate-pokeball-spin: pokeball-spin 1.8s cubic-bezier(0.7, 0, 0.3, 1) infinite;
+  --animate-sprite-pop: sprite-pop 420ms ease-out both;
+}
+
+/*
+  Runs once when the sprite stops loading. The overshoot lives in the
+  keyframes rather than the easing curve so it cannot compound into a wobble,
+  and `both` holds the final frame so the sprite does not snap back if the
+  animation finishes before a repaint.
+*/
+@keyframes sprite-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /*
