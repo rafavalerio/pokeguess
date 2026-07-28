@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useReducer } from 'react'
+import { useCallback, useEffect, useReducer, useSyncExternalStore } from 'react'
 
 import GuessGrid from './GuessGrid'
 import PokedexShell from './PokedexShell'
@@ -12,8 +12,43 @@ import { getPokemonName } from '@/lib/pokemon'
 const BEST_STREAK_KEY = 'bestStreak'
 const rng: Rng = () => Math.random()
 
+// createInitialState draws from Math.random, so the state it produces
+// necessarily differs between the server render and the client's first
+// render. Nothing derived from that random state (the silhouette, the
+// revealed name, the guess grid) may be rendered until after mount, or
+// hydration will fail with a text/attribute mismatch. These placeholders
+// reserve the exact same footprint so there is no layout shift once the
+// real, client-only content swaps in.
+const SilhouettePlaceholder = () => (
+  <div className="bg-screen-sunk mx-auto flex size-48 items-center justify-center rounded-full sm:size-56" />
+)
+
+const GuessGridPlaceholder = () => (
+  <div className="grid grid-cols-2 gap-2">
+    {[0, 1, 2, 3].map((slot) => (
+      <button
+        key={slot}
+        type="button"
+        disabled
+        className="border-screen-sunk bg-button text-ink flex items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-sm disabled:cursor-default"
+      >
+        {' '}
+      </button>
+    ))}
+  </div>
+)
+
+const emptySubscribe = () => () => {}
+
+// SSR-safe mount detection: the server snapshot is always `false`, and the
+// client snapshot is always `true`, so this reads `false` on the server and
+// on the client's very first (hydrating) render, then flips to `true` once
+// React commits on the client — without calling setState from an effect.
+const useMounted = () => useSyncExternalStore(emptySubscribe, () => true, () => false)
+
 const Game = () => {
   const [state, dispatch] = useReducer(gameReducer, rng, createInitialState)
+  const mounted = useMounted()
 
   useEffect(() => {
     const stored = Number(localStorage.getItem(BEST_STREAK_KEY))
@@ -29,7 +64,7 @@ const Game = () => {
   }, [state.bestStreak])
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
-  const revealed = state.status === 'revealed'
+  const revealed = mounted && state.status === 'revealed'
 
   return (
     <PokedexShell>
@@ -41,26 +76,34 @@ const Game = () => {
       </div>
 
       <div className="mb-3">
-        <PokemonSilhouette dex={state.dex} revealed={revealed} onReady={handleReady} />
+        {mounted ? (
+          <PokemonSilhouette dex={state.dex} revealed={revealed} onReady={handleReady} />
+        ) : (
+          <SilhouettePlaceholder />
+        )}
       </div>
 
       <p className="text-ink mb-4 h-6 text-center text-sm font-medium">
         {revealed ? `#${state.dex} · ${getPokemonName(state.dex)}` : ' '}
       </p>
 
-      <GuessGrid
-        options={state.options}
-        answer={state.dex}
-        guess={state.guess}
-        revealed={revealed}
-        onGuess={(dex) => dispatch({ type: 'GUESS', dex })}
-      />
+      {mounted ? (
+        <GuessGrid
+          options={state.options}
+          answer={state.dex}
+          guess={state.guess}
+          revealed={revealed}
+          onGuess={(dex) => dispatch({ type: 'GUESS', dex })}
+        />
+      ) : (
+        <GuessGridPlaceholder />
+      )}
 
       <button
         type="button"
         onClick={() => dispatch({ type: 'NEXT', rng })}
         disabled={!revealed}
-        className="bg-shell focus-visible:ring-shell mt-4 w-full rounded-lg py-2.5 text-sm font-medium text-white transition-opacity focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
+        className="bg-shell focus-visible:ring-shell mt-4 w-full rounded-lg py-2.5 text-sm font-medium text-button transition-opacity focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
       >
         Next
       </button>
