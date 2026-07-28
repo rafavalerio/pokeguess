@@ -41,12 +41,22 @@ fix during the rewrite than to port forward deliberately.
 | Components | antd ^4.24.2 | none (hand-built) |
 | Styling | styled-components ^5.3.6 | Tailwind v4 |
 | Utilities | lodash ^4.17.21 | none (local helpers) |
+| Icons | @ant-design/icons (undeclared) | lucide-react |
 | Testing | none | vitest + @testing-library/react + jsdom |
+
+### Icons
+
+`lucide-react` is the icon library. The current UI uses exactly two icons —
+`CheckCircleOutlined` and `CloseCircleOutlined` on the revealed options — which
+map to lucide's `Check` and `X`. Icons are imported individually so they
+tree-shake, and any decorative icon carries `aria-hidden`.
 
 ### Dependency removals
 
 Dropped: `antd`, `@ant-design/icons`, `styled-components`,
 `@types/styled-components`, `lodash`, `@types/lodash`.
+
+Added: `lucide-react`.
 
 `@ant-design/icons` is currently imported by `components/App.tsx` but absent from
 `package.json` — it resolves only as a transitive dependency of antd. Removing
