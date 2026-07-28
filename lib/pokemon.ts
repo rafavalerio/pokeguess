@@ -1,4 +1,4 @@
-export const pokemonNames = [
+export const pokemonNames: readonly string[] = [
   'Bulbasaur',
   'Ivysaur',
   'Venusaur',
@@ -905,3 +905,6 @@ export const pokemonNames = [
   'Overqwil',
   'Enamorus',
 ]
+
+export const getPokemonName = (dex: number): string =>
+  pokemonNames[dex - 1] ?? 'Unknown'
