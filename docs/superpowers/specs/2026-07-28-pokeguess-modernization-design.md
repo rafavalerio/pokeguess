@@ -16,7 +16,7 @@ fix during the rewrite than to port forward deliberately.
 
 ## Goals
 
-- Run on a current stack: Next 15 (App Router), React 19, TypeScript 5.
+- Run on a current stack: Next 16 (App Router), React 19, TypeScript 6.
 - Remove antd and styled-components entirely; style with Tailwind v4.
 - Restructure the single 190-line `App.tsx` into small, composable components.
 - Fix the known logic defects.
@@ -37,7 +37,7 @@ fix during the rewrite than to port forward deliberately.
 | --- | --- | --- |
 | Framework | next 13.0.3, Pages Router | next 16.2.12, App Router |
 | UI runtime | react 18.2.0 | react 19.2.8 |
-| Language | typescript 4.8.4 | typescript 7.0.2 |
+| Language | typescript 4.8.4 | typescript 6.0.3 |
 | Components | antd ^4.24.2 | none (hand-built) |
 | Styling | styled-components ^5.3.6 | Tailwind v4 |
 | Utilities | lodash ^4.17.21 | none (local helpers) |
@@ -243,3 +243,15 @@ confirm the redesign renders as intended at desktop and mobile widths.
   `raw.githubusercontent.com`. It responds correctly today (001 and 905 return
   200, 906 returns 404), but it is a single point of failure with no CDN
   guarantees. Out of scope to change here; worth noting.
+
+## Amendment 2026-07-28: TypeScript 6, not 7
+
+TypeScript 7.0.2 is the current stable release, but `typescript-eslint@8.65.0` —
+bundled inside `eslint-config-next@16.2.12` — hard-throws on any TypeScript major
+`>= 7`, which makes `npm run lint` impossible to run at all. The library's own
+error points at the TypeScript 6 API as the supported path, and its TS 7 support
+is still open upstream (typescript-eslint issue #10940).
+
+The project pins `typescript@6.0.3`. This codebase uses no TypeScript 7 features,
+so the only cost is being one major behind, and it keeps the lint gate — including
+`next/core-web-vitals` accessibility and image rules — working.

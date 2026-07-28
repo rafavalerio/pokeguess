@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Rebuild the Pokéguess game on Next 16 (App Router), React 19, TypeScript 7 and Tailwind v4, removing antd, styled-components and lodash, fixing four known defects, and adding automated test coverage.
+**Goal:** Rebuild the Pokéguess game on Next 16 (App Router), React 19, TypeScript 6 and Tailwind v4, removing antd, styled-components and lodash, fixing four known defects, and adding automated test coverage.
 
 **Architecture:** All game rules live in `lib/game.ts` as pure functions plus a reducer, with the random number generator injected so tests are deterministic. React components are thin: `Game` owns the reducer and composes five presentational components that receive props and render. Styling is Tailwind utility classes with design tokens declared in an `@theme` block; no CSS-in-JS runtime.
 
-**Tech Stack:** next 16.2.12, react 19.2.8, typescript 7.0.2, tailwindcss 4.3.3, lucide-react 1.27.0, vitest 4.1.10, @testing-library/react 16.3.2, jsdom 30.0.0, eslint 10.8.0
+**Tech Stack:** next 16.2.12, react 19.2.8, typescript 6.0.3, tailwindcss 4.3.3, lucide-react 1.27.0, vitest 4.1.10, @testing-library/react 16.3.2, jsdom 30.0.0, eslint 10.8.0
 
 ## Global Constraints
 
@@ -85,7 +85,7 @@ Note `next lint` is gone in Next 16 — `lint` calls `eslint` directly.
     "eslint-config-next": "16.2.12",
     "jsdom": "30.0.0",
     "tailwindcss": "4.3.3",
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
     "vitest": "4.1.10"
   }
 }
@@ -1210,7 +1210,7 @@ for dex 1–905 are served from
 
 ## Stack
 
-Next 16 (App Router), React 19, TypeScript 7, Tailwind v4, Vitest and React
+Next 16 (App Router), React 19, TypeScript 6, Tailwind v4, Vitest and React
 Testing Library.
 ```
 
