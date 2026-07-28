@@ -211,10 +211,14 @@ npm install
 Expected: completes with no peer-dependency errors.
 
 ```bash
-npx tsc --noEmit
+npx tsc --noEmit || true
 ```
 
-Expected: PASS (the old `pages/` and `components/` still reference antd, so if this errors, that is expected at this point — Task 2 removes them. Record the errors and move on.)
+Expected: **FAIL**, and that is correct at this point. The old `pages/` and
+`components/` still import antd and styled-components, which are no longer
+installed. Task 3 deletes those files. Record the error list in your report and
+move on — do not attempt to fix them in this task, and do not reinstall the
+removed packages to make the check pass.
 
 - [ ] **Step 11: Commit**
 
