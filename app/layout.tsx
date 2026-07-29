@@ -12,10 +12,11 @@ const onest = Onest({
   variable: '--font-onest',
 })
 
+// No `icons` entry: app/icon.png is picked up by Next's file convention, which
+// emits the <link rel="icon"> with the right type and size hints on its own.
 export const metadata: Metadata = {
   title: 'Pokéguess',
   description: "Guess the Pokémon from its silhouette.",
-  icons: { icon: '/favicon.ico' },
 }
 
 const RootLayout = ({ children }: { children: React.ReactNode }) => (
