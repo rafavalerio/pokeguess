@@ -44,6 +44,34 @@ mounted flag that gates it, avoiding a hydration mismatch.
 
 Sprites for dex 1–905 are served from
 [rafavalerio/pokemon-sprites](https://github.com/rafavalerio/pokemon-sprites).
+The unrevealed sprite is the real image behind a `brightness-0` filter rather
+than a second asset, so `PokemonSilhouette` also has to block the browser
+affordances that would render the raw image and leak the answer — long-press
+callout, drag preview, "open image in new tab".
+
+There is no backend: no API routes, no database. The only persisted state is the
+best streak in `localStorage`, written best-effort so the game still plays when
+site data is blocked.
+
+## Layout
+
+```
+app/           App Router entry, root layout, Tailwind theme in globals.css
+components/    Game.tsx owns all state; the rest are presentational
+lib/           Pure game logic, the 905-name table, dex formatting
+docs/          Design spec and implementation plan for the modernization
+```
+
+Colours and animations are Tailwind v4 `@theme` tokens in `app/globals.css`, and
+`prefers-reduced-motion` is honoured globally there for every animation and
+transition.
+
+## Tests
+
+`lib/game.test.ts` covers the reducer directly with scripted `rng` functions;
+`components/Game.test.tsx` drives the rendered game with React Testing Library
+and `user-event`. 24 tests, and they query by role and accessible name — so they
+are also the guard on the game's accessibility semantics.
 
 ## Stack
 
