@@ -1,7 +1,12 @@
 const Stat = ({ label, value }: { label: string; value: string }) => (
   <div className="flex items-baseline gap-1.5">
-    <span className="text-ink-soft text-xs">{label}</span>
-    <span className="text-ink text-sm font-medium" data-testid={`stat-${label.toLowerCase()}`}>
+    <span className="text-ink-soft text-xs font-medium">{label}</span>
+    {/* tabular-nums so the counter keeps its width as it climbs and the row
+        beside it does not nudge sideways on every correct guess. */}
+    <span
+      className="text-ink text-sm font-semibold tabular-nums"
+      data-testid={`stat-${label.toLowerCase()}`}
+    >
       {value}
     </span>
   </div>

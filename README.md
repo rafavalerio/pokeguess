@@ -65,6 +65,12 @@ Colours and animations are Tailwind v4 `@theme` tokens in `app/globals.css`, and
 `prefers-reduced-motion` is honoured globally there for every animation and
 transition.
 
+Type is [Onest](https://fonts.google.com/specimen/Onest), loaded as a variable
+font through `next/font/google` — one file covering the whole 100–900 axis, of
+which the UI uses 400/500/600/700. Hover and cursor affordances are gated on
+`enabled:`, so revealed answers and loading skeletons stay inert, and Tailwind
+v4 scopes `hover:` to `@media (hover: hover)` so none of it sticks on touch.
+
 ## Tests
 
 `lib/game.test.ts` covers the reducer directly with scripted `rng` functions;

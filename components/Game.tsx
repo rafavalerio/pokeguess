@@ -82,7 +82,12 @@ const Game = () => {
 
   return (
     <PokedexShell>
-      <h1 className="text-ink mb-1 text-center text-lg font-medium">Pokéguess</h1>
+      {/*
+        Onest's geometric letterforms carry a lot of sidebearing at display
+        sizes, so the title takes negative tracking to keep it feeling like one
+        word rather than spaced-out capitals.
+      */}
+      <h1 className="text-ink mb-1 text-center text-xl font-bold tracking-tight">Pokéguess</h1>
       <p className="text-ink-soft mb-3 text-center text-xs">Who&apos;s that Pokémon?</p>
 
       <div className="mb-4">
@@ -102,7 +107,7 @@ const Game = () => {
         )}
       </div>
 
-      <p className="text-ink mb-4 h-6 text-center text-sm font-medium">
+      <p className="text-ink mb-4 h-6 text-center text-sm font-semibold tabular-nums">
         {revealed ? `#${state.dex} · ${getPokemonName(state.dex)}` : ' '}
       </p>
 
@@ -123,7 +128,7 @@ const Game = () => {
         type="button"
         onClick={() => dispatch({ type: 'NEXT', rng })}
         disabled={!revealed}
-        className="bg-shell focus-visible:ring-shell mt-4 w-full rounded-lg py-2.5 text-sm font-medium text-button transition-opacity focus-visible:ring-2 focus-visible:outline-none disabled:opacity-40"
+        className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 w-full select-none rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
       >
         {revealed && state.guess !== state.dex ? 'Start again' : 'Next'}
       </button>

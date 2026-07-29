@@ -1,6 +1,14 @@
 @import 'tailwindcss';
 
 @theme {
+  /*
+    Tailwind's --default-font-family resolves to --font-sans, so overriding it
+    here is enough to move the whole page onto Onest — no font-* class on <body>
+    and no per-component opt-in. The system stack stays behind it for the swap
+    window and for the accented glyphs in names like Nidoran♀.
+  */
+  --font-sans: var(--font-onest), ui-sans-serif, system-ui, sans-serif;
+
   --color-shell: #d13b32;
   --color-shell-dark: #a32d26;
   --color-shell-edge: #e8837c;

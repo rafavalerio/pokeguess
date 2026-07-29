@@ -87,6 +87,19 @@ native drag separately from pointer events.
 - Colours and animations are Tailwind v4 `@theme` tokens in `app/globals.css`
   (`bg-screen-sunk`, `text-ink-soft`, `animate-sprite-pop`, …). Add a token
   there rather than hard-coding a hex value in a class.
+- **Type is Onest**, loaded as a variable font in `app/layout.tsx` and wired in
+  through `--font-sans`, so it applies page-wide with no `font-*` class on
+  `<body>`. The scale in use is 400 body, 500 labels and options, 600 stat
+  values and the revealed name, 700 the title. Counters and the dex number
+  carry `tabular-nums` so they do not change width as they change value.
+- **Interactive state goes behind `enabled:`** — `enabled:cursor-pointer`,
+  `enabled:hover:*`, `enabled:active:*`. A disabled button still matches
+  `:hover` in CSS, so an ungated hover would light up the revealed answers and
+  the loading skeletons as if they were live. Tailwind v4 also drops the
+  browser's default `cursor: pointer` on buttons, so a new button needs
+  `enabled:cursor-pointer` spelled out or it will show an arrow.
+- Tailwind v4 already wraps the `hover:` variant in `@media (hover: hover)`, so
+  hover styling is desktop-only for free — do not hand-roll that media query.
 - `prefers-reduced-motion` is handled globally in `globals.css` and covers all
   animations and transitions — no need to repeat it per component.
 - Comments explain *why*, not what, and the existing ones are load-bearing

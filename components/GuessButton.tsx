@@ -4,8 +4,11 @@ import { getPokemonName } from '@/lib/pokemon'
 
 export type GuessState = 'idle' | 'correct' | 'wrong'
 
+// Interactive styling is gated on `enabled:` throughout. A disabled button can
+// still match :hover in CSS, so without the gate the revealed answers and the
+// loading skeletons would both light up under the cursor as if they were live.
 const styles: Record<GuessState, string> = {
-  idle: 'bg-button text-ink border-screen-sunk hover:border-shell hover:bg-screen-sunk',
+  idle: 'bg-button text-ink border-screen-sunk enabled:hover:border-shell enabled:hover:bg-screen-sunk enabled:hover:-translate-y-px enabled:active:translate-y-0',
   correct: 'bg-correct text-correct-ink border-correct',
   wrong: 'bg-wrong text-wrong-ink border-wrong',
 }
@@ -14,7 +17,7 @@ const styles: Record<GuessState, string> = {
 // cannot silently drift from the real button's layout — that drift is exactly
 // the layout shift the placeholder exists to prevent.
 export const guessButtonClassName = (state: GuessState): string =>
-  `focus-visible:ring-shell flex items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-sm transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default ${styles[state]}`
+  `focus-visible:ring-shell flex select-none items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-sm font-medium transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer disabled:cursor-default ${styles[state]}`
 
 type Props = {
   dex: number
