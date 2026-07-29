@@ -59,7 +59,6 @@ site data is blocked.
 app/           App Router entry, root layout, Tailwind theme in globals.css
 components/    Game.tsx owns all state; the rest are presentational
 lib/           Pure game logic, the 905-name table, dex formatting
-docs/          Design spec and implementation plan for the modernization
 ```
 
 Colours and animations are Tailwind v4 `@theme` tokens in `app/globals.css`, and
