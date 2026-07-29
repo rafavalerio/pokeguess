@@ -30,6 +30,10 @@ const SilhouettePlaceholder = () => (
 const GuessGridPlaceholder = () => (
   <div className="grid grid-cols-2 gap-2">
     {[0, 1, 2, 3].map((slot) => (
+      // These skeletons are disabled and unlabelled on purpose: they exist to
+      // hold the slot's footprint until the real options arrive. Labelling them
+      // would announce four fake options that cannot be pressed.
+      // oxlint-disable-next-line jsx-a11y/control-has-associated-label
       <button key={slot} type="button" disabled className={guessButtonClassName('idle')}>
         <span className="flex h-5 items-center">
           <span className="bg-screen-sunk block h-2.5 w-16 animate-pulse rounded-full" />

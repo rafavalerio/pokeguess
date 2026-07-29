@@ -24,7 +24,8 @@ Then open http://localhost:3000.
 | `npm run dev` | Start the dev server |
 | `npm run build` | Production build |
 | `npm start` | Serve the production build |
-| `npm run lint` | ESLint |
+| `npm run lint` | Lint with oxlint |
+| `npm run typecheck` | Type-check without emitting |
 | `npm test` | Run the test suite once |
 | `npm run test:watch` | Run tests in watch mode |
 
@@ -47,21 +48,39 @@ Sprites for dex 1–905 are served from
 ## Stack
 
 Next 16 (App Router), React 19, TypeScript 6, Tailwind v4, Vitest and React
-Testing Library.
+Testing Library. Linting is [oxlint](https://oxc.rs), configured in
+`.oxlintrc.json`.
 
-Two version pins are deliberate and should not be bumped casually:
+Every dependency is a caret range resolved by the lockfile, so `npm update`
+moves the whole tree forward and `npm audit` reports zero advisories.
 
-- **TypeScript 6, not 7.** `typescript-eslint` throws on any TypeScript major
-  `>= 7`, which makes `npm run lint` impossible to run.
-- **ESLint 9, not 10.** Every plugin `eslint-config-next@16` bundles peers at
-  `eslint ^9` or lower; under ESLint 10 the run crashes with
-  `TypeError: scopeManager.addGlobals is not a function`.
-- **jsdom 29, not 30.** jsdom 30 requires Node `^22.22.2`; 29.1.1 accepts
-  `^22.13.0`. Test-only, so this costs nothing and keeps installs warning-free.
+### Why oxlint and not ESLint
 
-`npm audit` reports advisories in ESLint's transitive tree (`brace-expansion`,
-`minimatch`, `@eslint/*`). They are dev-only and have no forward fix — npm's
-suggested "fix" is to downgrade `next` to 9.3.3 and `eslint-config-next` to
-12.0.4, which would undo this entire project. **Do not run `npm audit fix
---force`.** `postcss` and `sharp` advisories are genuinely fixed, via the
-`overrides` block in `package.json`.
+`eslint-config-next` pulls in `eslint-plugin-{react,import,jsx-a11y}`, and that
+subtree dictated three separate version pins: TypeScript had to stay below 6.1
+(`typescript-eslint` caps at `<6.1.0`), ESLint had to stay on 9 (the bundled
+plugins crash under 10), and nine high-severity advisories sat permanently in
+the tree via `minimatch@3 -> brace-expansion@1`, a line that has no patched
+release — only `brace-expansion@5.0.8` is fixed.
+
+oxlint is a single binary with no transitive dependencies. It ships all 21
+`@next/eslint-plugin-next` rules plus the React, hooks, import and jsx-a11y
+rules the old config provided, so nothing is lost, and it removed 284 packages
+along with every advisory and every pin.
+
+### The remaining constraints
+
+- **`overrides` for `postcss` and `sharp`.** Next 16.2 depends on
+  `postcss@8.4.31` exactly and on a `sharp` below 0.35, both of which carry
+  high-severity advisories. The overrides are what keeps `npm audit` clean;
+  removing them brings back three advisories. They can go once Next ships a
+  release that bumps both.
+- **jsdom 29, not 30.** jsdom 30 requires Node `^22.22.2`. The `^29.1.1` range
+  caps itself, so it will not jump until the range is widened — do that after
+  moving local and CI Node to 22.22.2 or newer.
+- **TypeScript 6, not 7.** TypeScript 7 type-checks this project cleanly, but
+  Next 16.2 rejects its compiler API unless `experimental.useTypeScriptCli` is
+  enabled. Worth revisiting when that flag graduates.
+
+**Do not run `npm audit fix --force`.** Its suggested fix is still to downgrade
+`next` to 9.3.3.
