@@ -20,10 +20,10 @@ const PokemonSilhouette = ({ pokemonId, roundId, status, onReady }: Props) => {
   const revealed = status === 'revealed'
   const loading = status === 'loading'
 
-  // Keyed and re-run on `roundId`, not `dex`: a repeat dex draw across NEXT
-  // would otherwise leave both unchanged, so the <img> would never remount
-  // and no load event (nor this effect) would ever fire again, stranding the
-  // round in 'loading' forever.
+  // Keyed and re-run on `roundId`, not `pokemonId`: a repeat pokemonId draw
+  // across NEXT would otherwise leave both unchanged, so the <img> would
+  // never remount, no load event (nor this effect) would ever fire again,
+  // stranding the round in 'loading' forever.
   useEffect(() => {
     if (ref.current?.complete) onReady()
   }, [roundId, onReady])
