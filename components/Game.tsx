@@ -28,13 +28,14 @@ const SilhouettePlaceholder = () => (
 // read as broken, where a bar reads as "not ready yet". The bar sits inside
 // the same button box, so the slot keeps the exact height of the loaded state.
 const GuessGridPlaceholder = () => (
-  <div className="grid grid-cols-2 gap-2">
+  <div className="flex flex-col gap-2">
     {[0, 1, 2, 3].map((slot) => (
       // These skeletons are disabled and unlabelled on purpose: they exist to
       // hold the slot's footprint until the real options arrive. Labelling them
       // would announce four fake options that cannot be pressed.
       // oxlint-disable-next-line jsx-a11y/control-has-associated-label
       <button key={slot} type="button" disabled className={guessButtonClassName('idle')}>
+        <span className="hidden size-5 shrink-0 sm:block" />
         <span className="flex h-5 items-center">
           <span className="bg-screen-sunk block h-2.5 w-16 animate-pulse rounded-full" />
         </span>
@@ -79,6 +80,36 @@ const Game = () => {
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
   const revealed = mounted && state.status === 'revealed'
+
+  // Digits 1-4 mirror clicking an option (matching the on-screen number
+  // badges), Space or N mirrors the Next/Start again button. Modifier keys
+  // are left alone so this doesn't fight browser shortcuts like Cmd+1 for
+  // tab switching.
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+
+      if (state.status === 'guessing') {
+        const index = Number(event.key) - 1
+        if (index < 0 || index > 3) return
+        const pokemonId = state.options[index]
+        if (pokemonId === undefined) return
+        dispatch({ type: 'GUESS', pokemonId })
+        return
+      }
+
+      if (state.status === 'revealed') {
+        const isNext = state.guess === state.pokemonId
+        if (event.key === ' ' || (isNext && event.key.toLowerCase() === 'n')) {
+          event.preventDefault()
+          dispatch({ type: 'NEXT', rng })
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [state.status, state.options, state.guess, state.pokemonId])
 
   return (
     <PokedexShell>

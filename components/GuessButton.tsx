@@ -17,20 +17,32 @@ const styles: Record<GuessState, string> = {
 // cannot silently drift from the real button's layout — that drift is exactly
 // the layout shift the placeholder exists to prevent.
 export const guessButtonClassName = (state: GuessState): string =>
-  `focus-visible:ring-shell flex select-none items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-sm font-medium transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer disabled:cursor-default ${styles[state]}`
+  `focus-visible:ring-shell flex w-full select-none items-center justify-start gap-2.5 rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer disabled:cursor-default ${styles[state]}`
+
+// The bordered "1"-"4" badge doubles as the keyboard-shortcut hint, so it only
+// shows while that shortcut is live (idle, i.e. still guessing) and only on
+// screens with a keyboard (sm and up) — on mobile it's just the name.
+const markerClassName =
+  'text-ink-soft hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex'
 
 type Props = {
   pokemonId: number
+  index: number
   state: GuessState
   disabled: boolean
   onClick: () => void
 }
 
-const GuessButton = ({ pokemonId, state, disabled, onClick }: Props) => (
+const GuessButton = ({ pokemonId, index, state, disabled, onClick }: Props) => (
   <button type="button" onClick={onClick} disabled={disabled} className={guessButtonClassName(state)}>
     {state === 'correct' && <Check className="size-4 shrink-0" aria-hidden="true" />}
     {state === 'wrong' && <X className="size-4 shrink-0" aria-hidden="true" />}
-    <span className="truncate">{getPokemonName(pokemonId)}</span>
+    {state === 'idle' && !disabled && (
+      <span aria-hidden="true" className={markerClassName}>
+        {index + 1}
+      </span>
+    )}
+    <span className="truncate text-left">{getPokemonName(pokemonId)}</span>
   </button>
 )
 

@@ -81,14 +81,10 @@ describe('Game', () => {
     const user = userEvent.setup()
     render(<Game />)
 
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const wrong = screen
       .getAllByRole('button')
-      .find(
-        (b) =>
-          b.textContent !== getPokemonName(pinnedAnswerId) &&
-          b.textContent !== 'Next' &&
-          b.textContent !== 'Start again',
-      )!
+      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
     await user.click(wrong)
 
     expect(screen.getByRole('button', { name: 'Start again' })).toBeEnabled()
@@ -121,11 +117,9 @@ describe('Game', () => {
     const user = userEvent.setup()
     render(<Game />)
 
-    const answerName = getPokemonName(pinnedAnswerId)
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const options = await screen.findAllByRole('button', { name: /.+/ })
-    const wrongOption = options.find(
-      (option) => option.textContent !== 'Next' && option.textContent !== answerName,
-    )
+    const wrongOption = options.find((option) => option !== answerButton && option.textContent !== 'Next')
     if (!wrongOption) throw new Error('Expected at least one wrong option to be rendered')
     await user.click(wrongOption)
 
@@ -163,5 +157,67 @@ describe('Game', () => {
 
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+  })
+
+  it('scores a guess triggered by pressing the matching number key', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    // GuessGrid renders the four options before the advance button, so the
+    // first four buttons in DOM order are the options, in the same order as
+    // their on-screen number badges.
+    const answerIndex = screen.getAllByRole('button').slice(0, 4).indexOf(answerButton)
+
+    await user.keyboard(String(answerIndex + 1))
+
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
+  })
+
+  it('ignores a number key guess when a modifier key is held', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const answerIndex = screen.getAllByRole('button').slice(0, 4).indexOf(answerButton)
+
+    // e.g. Cmd+1 is a browser tab-switch shortcut and must not double as a guess.
+    await user.keyboard(`{Meta>}${answerIndex + 1}{/Meta}`)
+
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
+    expect(answerButton).toBeEnabled()
+  })
+
+  it('advances to the next round when Space is pressed after a correct guess', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerName = getPokemonName(pinnedAnswerId)
+    await user.click(screen.getByRole('button', { name: answerName }))
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
+
+    await user.keyboard(' ')
+
+    await user.click(await screen.findByRole('button', { name: answerName }))
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
+  })
+
+  it('advances via Space but not N after a wrong guess, since the button reads "Start again"', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = screen
+      .getAllByRole('button')
+      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    await user.click(wrong)
+    expect(screen.getByRole('button', { name: 'Start again' })).toBeEnabled()
+
+    await user.keyboard('n')
+    expect(screen.getByRole('button', { name: 'Start again' })).toBeEnabled()
+
+    await user.keyboard(' ')
+    expect(screen.queryByRole('button', { name: 'Start again' })).not.toBeInTheDocument()
   })
 })

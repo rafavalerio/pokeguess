@@ -21,11 +21,12 @@ const stateFor = (
 }
 
 const GuessGrid = ({ options, answer, guess, revealed, disabled, onGuess }: Props) => (
-  <div className="grid grid-cols-2 gap-2">
-    {options.map((pokemonId) => (
+  <div className="flex flex-col gap-2">
+    {options.map((pokemonId, index) => (
       <GuessButton
         key={pokemonId}
         pokemonId={pokemonId}
+        index={index}
         state={stateFor(pokemonId, answer, guess, revealed)}
         disabled={disabled}
         onClick={() => onGuess(pokemonId)}
