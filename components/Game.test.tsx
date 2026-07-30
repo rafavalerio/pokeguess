@@ -41,7 +41,7 @@ describe('Game', () => {
     // Pinning Math.random to a constant value also means generateOptions's
     // random-draw loop exhausts its guard every round (see lib/game.ts) and
     // falls back to its deterministic sequential fill. The "wrong" option
-    // these tests click is therefore always a low, fallback-filled dex, not
+    // these tests click is therefore always a low, fallback-filled id, not
     // a genuine random draw — harmless for what these tests assert, but
     // worth knowing so the fixed set of option names here doesn't look like
     // a mistake.

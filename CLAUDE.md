@@ -12,12 +12,13 @@ GitHub repo, and the only persisted state is `bestStreak` in `localStorage`.
 ## Commands
 
 ```bash
-npm run dev        # dev server on :3000
-npm run build      # production build (also type-checks)
-npm run lint       # oxlint
-npm run typecheck  # tsc --noEmit
-npm test           # vitest run
-npm run test:watch # vitest in watch mode
+npm run dev           # dev server on :3000
+npm run build         # production build (also type-checks)
+npm run lint          # oxlint
+npm run typecheck     # tsc --noEmit
+npm test              # vitest run
+npm run test:watch    # vitest in watch mode
+npm run pokemon:build # regenerate lib/pokemonData.ts from PokeAPI
 ```
 
 Requires Node 22 (`.nvmrc`, `engines`). Run `nvm use` first.
@@ -65,7 +66,7 @@ The gate is `useMounted()`, built on `useSyncExternalStore` (server snapshot
 `SilhouettePlaceholder` and `GuessGridPlaceholder` reserve the exact footprint
 of the real content so nothing shifts when it swaps in.
 
-If you add anything derived from `state.dex` or `state.options` to the tree,
+If you add anything derived from `state.pokemonId` or `state.options` to the tree,
 it has to sit behind the `mounted` check.
 
 ### Why `roundId` exists

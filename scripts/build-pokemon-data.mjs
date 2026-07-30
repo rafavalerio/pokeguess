@@ -4,21 +4,30 @@ const SPECIES_NAMES = JSON.parse(readFileSync(new URL('./species-names.json', im
 
 // Markers that mean "this is a battle-only or cosmetic variant riding on an
 // in-scope suffix, not the regional form / mega / gigantamax itself" — e.g.
-// raticate-totem-alola, darmanitan-galar-zen, pikachu-alola-cap.
+// raticate-totem-alola, darmanitan-galar-zen, pikachu-alola-cap. Matched
+// per hyphen-separated segment (see isExcluded below), not as a substring,
+// so this can't silently over-match a species name that merely contains one
+// of these words (zamazenta, capsakid, finizen, ...).
 const EXCLUDE_MARKERS = ['totem', 'zen', 'cap', 'starter']
 
-// A handful of Gigantamax species whose PokeAPI name carries an extra
-// cosmetic-form segment before "-gmax" that doesn't match the species name
-// directly (Toxtricity and Urshifu each have two named styles). This is a
-// closed, known set, not a heuristic — extend it only if a future game adds
-// another species shaped like this. `style` disambiguates the two entries
-// that would otherwise share a display name (both resolve to the same
-// speciesDex and both are "Gigantamax <species>").
-const COSMETIC_GMAX_EXCEPTIONS = {
+const isExcluded = (name) => name.split('-').some((seg) => EXCLUDE_MARKERS.includes(seg))
+
+// A handful of species whose PokeAPI name carries an extra gender- or
+// cosmetic-form segment before the mega/gmax suffix that doesn't match the
+// species name directly. This is a closed, known set, not a heuristic —
+// extend it only if a future game adds another species shaped like this.
+// `style` disambiguates entries that would otherwise share a display name
+// (Toxtricity and Urshifu each have two named Gigantamax styles that resolve
+// to the same speciesDex). Entries with no `style` (Meowstic, Tatsugiri) are
+// the only named Mega for their species once the sibling cosmetic/gender
+// duplicate is dropped, so they get the plain "Mega <species>" name.
+const FORM_BASE_OVERRIDES = {
   'toxtricity-amped': { base: 'toxtricity', style: 'amped' },
   'toxtricity-low-key': { base: 'toxtricity', style: 'low-key' },
   'urshifu-single-strike': { base: 'urshifu', style: 'single-strike' },
   'urshifu-rapid-strike': { base: 'urshifu', style: 'rapid-strike' },
+  'meowstic-male': { base: 'meowstic' },
+  'tatsugiri-stretchy': { base: 'tatsugiri' },
 }
 
 const SUFFIXES = [
@@ -97,7 +106,7 @@ for (const [, dex] of speciesDexByName) {
 const dropped = []
 for (const p of pokemonResults) {
   const raw = p.name
-  if (EXCLUDE_MARKERS.some((marker) => raw.includes(marker))) continue
+  if (isExcluded(raw)) continue
   const normalized = raw.replace(/-standard$/, '')
 
   const breedMatch = normalized.match(PALDEA_BREED_RE)
@@ -138,15 +147,21 @@ for (const p of pokemonResults) {
     continue
   }
 
-  const cosmetic = COSMETIC_GMAX_EXCEPTIONS[stripped]
+  const cosmetic = FORM_BASE_OVERRIDES[stripped]
   if (!cosmetic) {
     dropped.push(raw)
     continue
   }
   const dex = speciesDexByName.get(cosmetic.base)
+  // `style` disambiguates the styled Gigantamax pairs (Toxtricity, Urshifu);
+  // entries with no style (Meowstic, Tatsugiri) get the plain kind name
+  // ("Mega <species>") since they're the only surviving form for that base.
+  const name = cosmetic.style
+    ? displayName(speciesDisplayName(dex), 'gmax-cosmetic', cosmetic.style)
+    : displayName(speciesDisplayName(dex), kind)
   entries.push({
     id: idFromUrl(p.url),
-    name: displayName(speciesDisplayName(dex), 'gmax-cosmetic', cosmetic.style),
+    name,
     speciesDex: dex,
   })
 }

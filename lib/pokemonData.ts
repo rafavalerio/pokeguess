@@ -5994,6 +5994,11 @@ export const pokemonList: readonly PokemonEntry[] = [
     "speciesDex": 623
   },
   {
+    "id": 10314,
+    "name": "Mega Meowstic",
+    "speciesDex": 678
+  },
+  {
     "id": 10315,
     "name": "Mega Crabominable",
     "speciesDex": 740
@@ -6022,6 +6027,11 @@ export const pokemonList: readonly PokemonEntry[] = [
     "id": 10321,
     "name": "Mega Glimmora",
     "speciesDex": 970
+  },
+  {
+    "id": 10324,
+    "name": "Mega Tatsugiri",
+    "speciesDex": 978
   },
   {
     "id": 10325,

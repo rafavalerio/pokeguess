@@ -28,6 +28,7 @@ Then open http://localhost:3000.
 | `npm run typecheck` | Type-check without emitting |
 | `npm test` | Run the test suite once |
 | `npm run test:watch` | Run tests in watch mode |
+| `npm run pokemon:build` | Regenerate `lib/pokemonData.ts` from PokeAPI |
 
 ## How it works
 

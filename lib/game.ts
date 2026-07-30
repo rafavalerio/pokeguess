@@ -26,7 +26,7 @@ export const generateOptions = (answerId: number, rng: Rng): number[] => {
   // Deterministically fill any remaining slots so the result is always
   // exactly 4 unique ids.
   let index = 0
-  while (options.size < 4) {
+  while (options.size < Math.min(4, pokemonList.length)) {
     options.add(pokemonList[index].id)
     index = index >= pokemonList.length - 1 ? 0 : index + 1
   }
