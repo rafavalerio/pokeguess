@@ -40,8 +40,15 @@ and composes the presentational components (`GuessGrid`, `GuessButton`,
 hold no game state of their own — if you find yourself adding `useState` to one
 of them, the state probably belongs in the reducer.
 
-**`lib/pokemon.ts`** is a flat array of 905 names indexed by dex number;
-`lib/formatDexNumber.ts` zero-pads for the sprite URL.
+**`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
+`scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
+in-scope alternate forms — Mega Evolutions, regional forms (Alolan/Galarian/
+Hisuian/Paldean), and Gigantamax forms — each as a `PokemonEntry { id, name,
+speciesDex }`. `id` doubles as the sprite filename; `speciesDex` is the
+national dex number a form shares with its base species. `lib/pokemon.ts` is
+the hand-maintained lookup layer over it (`getPokemonEntry`, `getPokemonName`,
+`getSpeciesDex`), keyed by `id` rather than array index since ids are no
+longer contiguous once forms are included.
 
 ### The hydration constraint
 
@@ -63,10 +70,10 @@ it has to sit behind the `mounted` check.
 
 ### Why `roundId` exists
 
-`GameState.roundId` increments on every `NEXT`. A repeat dex draw (~1 in 905)
-would leave `dex` unchanged, so an `<img>` keyed on `dex` would not remount, no
-`load` event would fire, and the round would be stranded in `'loading'` forever.
-Key and re-run effects on `roundId`, never on `dex`.
+`GameState.roundId` increments on every `NEXT`. A repeat draw would leave
+`pokemonId` unchanged, so an `<img>` keyed on `pokemonId` would not remount, no
+`load` event would fire, and the round would be stranded in `'loading'`
+forever. Key and re-run effects on `roundId`, never on `pokemonId`.
 
 ### Hiding the answer
 

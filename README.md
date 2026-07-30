@@ -42,8 +42,12 @@ draws a different Pokémon in each place. Nothing derived from that draw is
 rendered until after mount; `useSyncExternalStore` provides the SSR-safe
 mounted flag that gates it, avoiding a hydration mismatch.
 
-Sprites for dex 1–905 are served from
-[rafavalerio/pokemon-sprites](https://github.com/rafavalerio/pokemon-sprites).
+Sprites are served from the `official-artwork` folder of
+[PokeAPI/sprites](https://github.com/PokeAPI/sprites). The full list — base
+species plus Megas, regional forms, and Gigantamax forms — is generated from
+PokeAPI's REST API by `scripts/build-pokemon-data.mjs` (`npm run
+pokemon:build`) into `lib/pokemonData.ts`, checked in rather than fetched at
+runtime.
 The unrevealed sprite is the real image behind a `brightness-0` filter rather
 than a second asset, so `PokemonSilhouette` also has to block the browser
 affordances that would render the raw image and leak the answer — long-press
@@ -58,7 +62,7 @@ site data is blocked.
 ```
 app/           App Router entry, root layout, Tailwind theme in globals.css
 components/    Game.tsx owns all state; the rest are presentational
-lib/           Pure game logic, the 905-name table, dex formatting
+lib/           Pure game logic, the generated Pokémon list and its lookup helpers
 ```
 
 Colours and animations are Tailwind v4 `@theme` tokens in `app/globals.css`, and
