@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
 import { getPokemonName } from '@/lib/pokemon'
+import { pokemonList } from '@/lib/pokemonData'
 
 // Lets a test hold the sprite in its loading state by withholding the load
 // event, which is otherwise fired immediately on mount.
@@ -28,6 +29,13 @@ vi.mock('next/image', async () => {
 })
 
 describe('Game', () => {
+  // Math.random is pinned to 0.5 for every call in this file (see
+  // beforeEach), and lib/game.ts's randomPokemon does
+  // `pokemonList[Math.floor(rng() * pokemonList.length)]` — mirror that here
+  // so this constant tracks lib/pokemonData.ts automatically instead of
+  // going stale the next time the data is regenerated.
+  const pinnedAnswerId = pokemonList[Math.floor(0.5 * pokemonList.length)].id
+
   beforeEach(() => {
     localStorage.clear()
     // Pinning Math.random to a constant value also means generateOptions's
@@ -51,8 +59,8 @@ describe('Game', () => {
 
     // No option name is readable while the silhouette is still loading, so the
     // answer cannot be guessed from the shortlist before it is visible.
-    for (const dex of [453, 1, 2, 3]) {
-      expect(screen.queryByText(getPokemonName(dex))).not.toBeInTheDocument()
+    for (const id of [pinnedAnswerId, 1, 2, 3]) {
+      expect(screen.queryByText(getPokemonName(id))).not.toBeInTheDocument()
     }
     // The grid's footprint is still reserved, so nothing shifts on load.
     expect(screen.getAllByRole('button')).toHaveLength(5)
@@ -62,7 +70,7 @@ describe('Game', () => {
     const user = userEvent.setup()
     render(<Game />)
 
-    const answerName = getPokemonName(453)
+    const answerName = getPokemonName(pinnedAnswerId)
     await user.click(screen.getByRole('button', { name: answerName }))
 
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
@@ -77,7 +85,7 @@ describe('Game', () => {
       .getAllByRole('button')
       .find(
         (b) =>
-          b.textContent !== getPokemonName(453) &&
+          b.textContent !== getPokemonName(pinnedAnswerId) &&
           b.textContent !== 'Next' &&
           b.textContent !== 'Start again',
       )!
@@ -91,7 +99,7 @@ describe('Game', () => {
     const user = userEvent.setup()
     render(<Game />)
 
-    await user.click(screen.getByRole('button', { name: getPokemonName(453) }))
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
 
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
     expect(
@@ -103,7 +111,7 @@ describe('Game', () => {
     const user = userEvent.setup()
     render(<Game />)
 
-    await user.click(screen.getByRole('button', { name: getPokemonName(453) }))
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
 
     expect(localStorage.getItem('bestStreak')).toBe('1')
   })
@@ -113,7 +121,7 @@ describe('Game', () => {
     const user = userEvent.setup()
     render(<Game />)
 
-    const answerName = getPokemonName(453)
+    const answerName = getPokemonName(pinnedAnswerId)
     const options = await screen.findAllByRole('button', { name: /.+/ })
     const wrongOption = options.find(
       (option) => option.textContent !== 'Next' && option.textContent !== answerName,
@@ -135,15 +143,15 @@ describe('Game', () => {
 
   it('stays playable across NEXT when the same Pokémon is drawn twice in a row', async () => {
     // Math.random is pinned to 0.5 for every call in this test file, so every
-    // round draws the same dex (453). This reproduces the exact scenario a
-    // real ~1-in-905 repeat draw would hit: if the round's identity is keyed
-    // on `dex` instead of a value that changes every NEXT, the silhouette
-    // never remounts, no load event fires, and the round is stuck in
-    // 'loading' forever — GUESS is rejected and Next stays disabled.
+    // round draws the same pokemonId (pinnedAnswerId). This reproduces the
+    // scenario a real repeat draw would hit: if the round's identity is keyed
+    // on `pokemonId` instead of a value that changes every NEXT, the
+    // silhouette never remounts, no load event fires, and the round is stuck
+    // in 'loading' forever — GUESS is rejected and Next stays disabled.
     const user = userEvent.setup()
     render(<Game />)
 
-    const answerName = getPokemonName(453)
+    const answerName = getPokemonName(pinnedAnswerId)
     await user.click(screen.getByRole('button', { name: answerName }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
 
