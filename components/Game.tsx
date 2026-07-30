@@ -8,7 +8,7 @@ import PokedexShell from './PokedexShell'
 import PokemonSilhouette from './PokemonSilhouette'
 import ScoreBoard from './ScoreBoard'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
-import { getPokemonName } from '@/lib/pokemon'
+import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const BEST_STREAK_KEY = 'bestStreak'
 const rng: Rng = () => Math.random()
@@ -97,7 +97,7 @@ const Game = () => {
       <div className="mb-3">
         {mounted ? (
           <PokemonSilhouette
-            dex={state.dex}
+            pokemonId={state.pokemonId}
             roundId={state.roundId}
             status={state.status}
             onReady={handleReady}
@@ -108,17 +108,17 @@ const Game = () => {
       </div>
 
       <p className="text-ink mb-4 h-6 text-center text-sm font-semibold tabular-nums">
-        {revealed ? `#${state.dex} · ${getPokemonName(state.dex)}` : ' '}
+        {revealed ? `#${getSpeciesDex(state.pokemonId)} · ${getPokemonName(state.pokemonId)}` : ' '}
       </p>
 
       {mounted && state.status !== 'loading' ? (
         <GuessGrid
           options={state.options}
-          answer={state.dex}
+          answer={state.pokemonId}
           guess={state.guess}
           revealed={revealed}
           disabled={state.status !== 'guessing'}
-          onGuess={(dex) => dispatch({ type: 'GUESS', dex })}
+          onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
         />
       ) : (
         <GuessGridPlaceholder />
@@ -130,7 +130,7 @@ const Game = () => {
         disabled={!revealed}
         className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 w-full select-none rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
       >
-        {revealed && state.guess !== state.dex ? 'Start again' : 'Next'}
+        {revealed && state.guess !== state.pokemonId ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )

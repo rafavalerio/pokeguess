@@ -6,7 +6,7 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'raw.githubusercontent.com',
-        pathname: '/rafavalerio/pokemon-sprites/**',
+        pathname: '/PokeAPI/sprites/**',
       },
     ],
   },

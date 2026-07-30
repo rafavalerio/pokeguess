@@ -3,20 +3,19 @@
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 
-import formatDexNumber from '@/lib/formatDexNumber'
-import { getPokemonName } from '@/lib/pokemon'
+import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const SPRITE_BASE =
-  'https://raw.githubusercontent.com/rafavalerio/pokemon-sprites/master/images'
+  'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork'
 
 type Props = {
-  dex: number
+  pokemonId: number
   roundId: number
   status: 'loading' | 'guessing' | 'revealed'
   onReady: () => void
 }
 
-const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
+const PokemonSilhouette = ({ pokemonId, roundId, status, onReady }: Props) => {
   const ref = useRef<HTMLImageElement>(null)
   const revealed = status === 'revealed'
   const loading = status === 'loading'
@@ -60,8 +59,12 @@ const PokemonSilhouette = ({ dex, roundId, status, onReady }: Props) => {
       <Image
         ref={ref}
         key={roundId}
-        src={`${SPRITE_BASE}/${formatDexNumber(dex)}.png`}
-        alt={revealed ? `${getPokemonName(dex)}, number ${dex}` : 'Hidden Pokémon silhouette'}
+        src={`${SPRITE_BASE}/${pokemonId}.png`}
+        alt={
+          revealed
+            ? `${getPokemonName(pokemonId)}, number ${getSpeciesDex(pokemonId)}`
+            : 'Hidden Pokémon silhouette'
+        }
         width={192}
         height={192}
         priority

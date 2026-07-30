@@ -20,17 +20,17 @@ export const guessButtonClassName = (state: GuessState): string =>
   `focus-visible:ring-shell flex select-none items-center justify-center gap-1.5 rounded-lg border-2 px-2 py-2.5 text-sm font-medium transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer disabled:cursor-default ${styles[state]}`
 
 type Props = {
-  dex: number
+  pokemonId: number
   state: GuessState
   disabled: boolean
   onClick: () => void
 }
 
-const GuessButton = ({ dex, state, disabled, onClick }: Props) => (
+const GuessButton = ({ pokemonId, state, disabled, onClick }: Props) => (
   <button type="button" onClick={onClick} disabled={disabled} className={guessButtonClassName(state)}>
     {state === 'correct' && <Check className="size-4 shrink-0" aria-hidden="true" />}
     {state === 'wrong' && <X className="size-4 shrink-0" aria-hidden="true" />}
-    <span className="truncate">{getPokemonName(dex)}</span>
+    <span className="truncate">{getPokemonName(pokemonId)}</span>
   </button>
 )
 
