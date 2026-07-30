@@ -11,12 +11,14 @@ const EXCLUDE_MARKERS = ['totem', 'zen', 'cap', 'starter']
 // cosmetic-form segment before "-gmax" that doesn't match the species name
 // directly (Toxtricity and Urshifu each have two named styles). This is a
 // closed, known set, not a heuristic — extend it only if a future game adds
-// another species shaped like this.
+// another species shaped like this. `style` disambiguates the two entries
+// that would otherwise share a display name (both resolve to the same
+// speciesDex and both are "Gigantamax <species>").
 const COSMETIC_GMAX_EXCEPTIONS = {
-  'toxtricity-amped': 'toxtricity',
-  'toxtricity-low-key': 'toxtricity',
-  'urshifu-single-strike': 'urshifu',
-  'urshifu-rapid-strike': 'urshifu',
+  'toxtricity-amped': { base: 'toxtricity', style: 'amped' },
+  'toxtricity-low-key': { base: 'toxtricity', style: 'low-key' },
+  'urshifu-single-strike': { base: 'urshifu', style: 'single-strike' },
+  'urshifu-rapid-strike': { base: 'urshifu', style: 'rapid-strike' },
 }
 
 const SUFFIXES = [
@@ -31,12 +33,20 @@ const SUFFIXES = [
 
 const PALDEA_BREED_RE = /^(.+)-paldea-(\w+)-breed$/
 
+// 'low-key' -> 'Low Key', 'single-strike' -> 'Single Strike'
+const titleCaseWords = (hyphenated) =>
+  hyphenated
+    .split('-')
+    .map((word) => `${word[0].toUpperCase()}${word.slice(1)}`)
+    .join(' ')
+
 const displayName = (speciesName, kind, extra) => {
   switch (kind) {
     case 'mega': return `Mega ${speciesName}`
     case 'mega-x': return `Mega ${speciesName} X`
     case 'mega-y': return `Mega ${speciesName} Y`
     case 'gmax': return `Gigantamax ${speciesName}`
+    case 'gmax-cosmetic': return `Gigantamax ${speciesName} (${titleCaseWords(extra)})`
     case 'alola': return `Alolan ${speciesName}`
     case 'galar': return `Galarian ${speciesName}`
     case 'hisui': return `Hisuian ${speciesName}`
@@ -121,13 +131,24 @@ for (const p of pokemonResults) {
   if (!suffixMatch) continue
   const [suffix, kind] = suffixMatch
   const stripped = normalized.slice(0, -suffix.length)
-  const base = speciesDexByName.has(stripped) ? stripped : COSMETIC_GMAX_EXCEPTIONS[stripped]
-  if (!base) {
+
+  if (speciesDexByName.has(stripped)) {
+    const dex = speciesDexByName.get(stripped)
+    entries.push({ id: idFromUrl(p.url), name: displayName(speciesDisplayName(dex), kind), speciesDex: dex })
+    continue
+  }
+
+  const cosmetic = COSMETIC_GMAX_EXCEPTIONS[stripped]
+  if (!cosmetic) {
     dropped.push(raw)
     continue
   }
-  const dex = speciesDexByName.get(base)
-  entries.push({ id: idFromUrl(p.url), name: displayName(speciesDisplayName(dex), kind), speciesDex: dex })
+  const dex = speciesDexByName.get(cosmetic.base)
+  entries.push({
+    id: idFromUrl(p.url),
+    name: displayName(speciesDisplayName(dex), 'gmax-cosmetic', cosmetic.style),
+    speciesDex: dex,
+  })
 }
 
 entries.sort((a, b) => a.id - b.id)

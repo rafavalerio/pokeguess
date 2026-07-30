@@ -5680,7 +5680,7 @@ export const pokemonList: readonly PokemonEntry[] = [
   },
   {
     "id": 10219,
-    "name": "Gigantamax Toxtricity",
+    "name": "Gigantamax Toxtricity (Amped)",
     "speciesDex": 849
   },
   {
@@ -5715,17 +5715,17 @@ export const pokemonList: readonly PokemonEntry[] = [
   },
   {
     "id": 10226,
-    "name": "Gigantamax Urshifu",
+    "name": "Gigantamax Urshifu (Single Strike)",
     "speciesDex": 892
   },
   {
     "id": 10227,
-    "name": "Gigantamax Urshifu",
+    "name": "Gigantamax Urshifu (Rapid Strike)",
     "speciesDex": 892
   },
   {
     "id": 10228,
-    "name": "Gigantamax Toxtricity",
+    "name": "Gigantamax Toxtricity (Low Key)",
     "speciesDex": 849
   },
   {
