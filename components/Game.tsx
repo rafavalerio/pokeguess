@@ -44,6 +44,15 @@ const GuessGridPlaceholder = () => (
   </div>
 )
 
+// Deliberately minimal — a placeholder to replace once the win screen gets
+// its own design pass.
+const WinScreen = ({ streak }: { streak: number }) => (
+  <div className="bg-screen-sunk mb-3 flex flex-col items-center justify-center gap-2 rounded-2xl px-6 py-16 text-center">
+    <p className="text-ink text-base font-semibold">You&apos;ve named every Pokémon!</p>
+    <p className="text-ink-soft text-sm">Final streak: {streak}</p>
+  </div>
+)
+
 const emptySubscribe = () => () => {}
 
 // SSR-safe mount detection: the server snapshot is always `false`, and the
@@ -80,6 +89,8 @@ const Game = () => {
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
   const revealed = mounted && state.status === 'revealed'
+  const won = mounted && state.status === 'won'
+  const canAdvance = revealed || won
 
   // Digits 1-4 mirror clicking an option (matching the on-screen number
   // badges), Space or N mirrors the Next/Start again button. Modifier keys
@@ -98,8 +109,8 @@ const Game = () => {
         return
       }
 
-      if (state.status === 'revealed') {
-        const isNext = state.guess === state.pokemonId
+      if (state.status === 'revealed' || state.status === 'won') {
+        const isNext = state.status === 'revealed' && state.guess === state.pokemonId
         if (event.key === ' ' || (isNext && event.key.toLowerCase() === 'n')) {
           event.preventDefault()
           dispatch({ type: 'NEXT', rng })
@@ -125,47 +136,53 @@ const Game = () => {
         <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
       </div>
 
-      <div className="mb-3">
-        {mounted ? (
-          <PokemonSilhouette
-            pokemonId={state.pokemonId}
-            roundId={state.roundId}
-            status={state.status}
-            onReady={handleReady}
-          />
-        ) : (
-          <SilhouettePlaceholder />
-        )}
-      </div>
-
-      <p className="text-ink mb-4 h-6 text-center text-sm font-semibold tabular-nums">
-        {revealed ? `#${getSpeciesDex(state.pokemonId)} · ${getPokemonName(state.pokemonId)}` : ' '}
-      </p>
-
-      {mounted && state.status !== 'loading' ? (
-        <GuessGrid
-          options={state.options}
-          answer={state.pokemonId}
-          guess={state.guess}
-          revealed={revealed}
-          disabled={state.status !== 'guessing'}
-          onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
-        />
+      {won ? (
+        <WinScreen streak={state.streak} />
       ) : (
-        <GuessGridPlaceholder />
+        <>
+          <div className="mb-3">
+            {mounted ? (
+              <PokemonSilhouette
+                pokemonId={state.pokemonId}
+                roundId={state.roundId}
+                status={state.status}
+                onReady={handleReady}
+              />
+            ) : (
+              <SilhouettePlaceholder />
+            )}
+          </div>
+
+          <p className="text-ink mb-4 h-6 text-center text-sm font-semibold tabular-nums">
+            {revealed ? `#${getSpeciesDex(state.pokemonId)} · ${getPokemonName(state.pokemonId)}` : ' '}
+          </p>
+
+          {mounted && state.status !== 'loading' ? (
+            <GuessGrid
+              options={state.options}
+              answer={state.pokemonId}
+              guess={state.guess}
+              revealed={revealed}
+              disabled={state.status !== 'guessing'}
+              onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
+            />
+          ) : (
+            <GuessGridPlaceholder />
+          )}
+        </>
       )}
 
       <button
         type="button"
         onClick={() => dispatch({ type: 'NEXT', rng })}
-        disabled={!revealed}
+        disabled={!canAdvance}
         className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
       >
         {/* The Space-bar hint mirrors the guess grid's number badges: same
             bordered box, same "only visible while the shortcut works" rule
-            (revealed, sm and up), just with an underscore standing in for
-            the spacebar. */}
-        {revealed && (
+            (revealed or won, sm and up), just with an underscore standing in
+            for the spacebar. */}
+        {canAdvance && (
           <span
             aria-hidden="true"
             className="text-button/40 hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex"
@@ -173,7 +190,7 @@ const Game = () => {
             _
           </span>
         )}
-        {revealed && state.guess !== state.pokemonId ? 'Start again' : 'Next'}
+        {won || (revealed && state.guess !== state.pokemonId) ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )

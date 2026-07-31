@@ -136,26 +136,33 @@ describe('Game', () => {
   })
 
   it('stays playable across NEXT when the same Pokémon is drawn twice in a row', async () => {
-    // Math.random is pinned to 0.5 for every call in this test file, so every
-    // round draws the same pokemonId (pinnedAnswerId). This reproduces the
-    // scenario a real repeat draw would hit: if the round's identity is keyed
-    // on `pokemonId` instead of a value that changes every NEXT, the
-    // silhouette never remounts, no load event fires, and the round is stuck
-    // in 'loading' forever — GUESS is rejected and Next stays disabled.
+    // Math.random is pinned to 0.5, so any round drawn with an empty
+    // no-repeat exclusion set resolves to pinnedAnswerId (see lib/game.ts's
+    // randomPokemonExcluding). A run's exclusion set resets the moment it
+    // ends, so guessing wrong on the very first round reproduces two
+    // consecutive rounds landing on the same pokemonId — the scenario a real
+    // repeat draw would hit: if the round's identity is keyed on `pokemonId`
+    // instead of a value that changes every NEXT, the silhouette never
+    // remounts, no load event fires, and the round is stuck in 'loading'
+    // forever — GUESS is rejected and the guess is silently dropped.
     const user = userEvent.setup()
     render(<Game />)
 
     const answerName = getPokemonName(pinnedAnswerId)
-    await user.click(screen.getByRole('button', { name: answerName }))
-    expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
+    const answerButton = screen.getByRole('button', { name: answerName })
+    const wrong = screen
+      .getAllByRole('button')
+      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    await user.click(wrong)
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
 
-    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Start again' }))
 
     // If the round is stuck in 'loading', the answer button is disabled and
     // this click is silently dropped instead of scoring.
     await user.click(await screen.findByRole('button', { name: answerName }))
 
-    expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
     expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled()
   })
 
@@ -199,7 +206,13 @@ describe('Game', () => {
 
     await user.keyboard(' ')
 
-    await user.click(await screen.findByRole('button', { name: answerName }))
+    // pinnedAnswerId is now excluded for the rest of this run (no-repeat), and
+    // Math.random stays pinned to 0.5, so every random draw attempt keeps
+    // landing back on the excluded id and falls through to
+    // randomPokemonExcluding's deterministic fallback: the first pokemonList
+    // entry that isn't excluded.
+    const nextAnswerId = pokemonList.find((entry) => entry.id !== pinnedAnswerId)!.id
+    await user.click(await screen.findByRole('button', { name: getPokemonName(nextAnswerId) }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
   })
 
