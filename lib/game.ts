@@ -70,7 +70,7 @@ export const generateOptions = (answerId: number, streak: number, rng: Rng): num
 
   // Skipped entirely at hardTarget 0 (streak 0-2) so the rng call sequence
   // — and therefore every existing scripted-rng test — is untouched at low
-  // streaks. See this task's note above.
+  // streaks.
   if (hardTarget > 0) {
     const hardCandidates = shuffle(
       pokemonList.filter((entry) => entry.id !== answerId && isHardDistractor(answer, entry)),

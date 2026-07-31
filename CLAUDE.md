@@ -86,7 +86,7 @@ forever. Key and re-run effects on `roundId`, never on `pokemonId`.
 `GameState.usedIds` tracks every Pokémon drawn as the answer during the
 current unbroken streak ("run"); the next draw excludes it
 (`randomPokemonExcluding`), so the same Pokémon never repeats within a run.
-It resets the moment a run ends (a wrong guess). If a run's `usedIds` ever
+It resets on the first `NEXT` after a run ends (a wrong guess). If a run's `usedIds` ever
 grows to cover the entire `pokemonList`, that's a win: `Status` gains
 `'won'`, set on the `NEXT` after the last correct guess (not on the `GUESS`
 itself, so the final reveal is still shown first) — no new round is drawn at
