@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { pokemonList } from './pokemonData'
-import { createInitialState, gameReducer, generateOptions, isHardDistractor, randomPokemon, spellingSimilarity, type Rng } from './game'
+import { createInitialState, gameReducer, generateOptions, isHardDistractor, randomPokemon, randomPokemonExcluding, spellingSimilarity, type Rng } from './game'
 
 const makeRng = (values: number[]): Rng => {
   let i = 0
@@ -9,6 +9,8 @@ const makeRng = (values: number[]): Rng => {
 }
 
 const validIds = new Set(pokemonList.map((entry) => entry.id))
+
+const idAt = (rngValue: number) => pokemonList[Math.floor(rngValue * pokemonList.length)].id
 
 describe('randomPokemon', () => {
   it('maps 0 to the first entry and just under 1 to the last entry', () => {
@@ -191,5 +193,60 @@ describe('generateOptions scales hard distractors with streak', () => {
       const options = generateOptions(kakunaId, 8, makeRng([seed / 20, 0.11, 0.22, 0.33, 0.44]))
       expect(hardCountIn(options)).toBeGreaterThanOrEqual(2)
     }
+  })
+})
+
+describe('randomPokemonExcluding', () => {
+  it('never returns an excluded id', () => {
+    const excluded = new Set([pokemonList[0].id])
+    for (let seed = 0; seed < 20; seed += 1) {
+      const result = randomPokemonExcluding(makeRng([seed / 20]), excluded)
+      expect(excluded.has(result.id)).toBe(false)
+    }
+  })
+
+  it('falls back deterministically when the rng keeps landing on an excluded id', () => {
+    const pinnedId = pokemonList[Math.floor(0.5 * pokemonList.length)].id
+    const excluded = new Set([pinnedId])
+    // rng is pinned to 0.5 forever, so every guard-loop attempt lands on the
+    // excluded id — this only returns if the deterministic fallback kicks in.
+    const result = randomPokemonExcluding(makeRng([0.5]), excluded)
+    expect(result.id).not.toBe(pinnedId)
+    expect(excluded.has(result.id)).toBe(false)
+  })
+})
+
+describe('no-repeat within a run', () => {
+  it('excludes the current run\'s drawn ids from the next draw while the streak continues', () => {
+    const pinnedId = idAt(0.5)
+    let state = createInitialState(makeRng([0.5]))
+    expect(state.pokemonId).toBe(pinnedId)
+    expect(state.usedIds.has(pinnedId)).toBe(true)
+
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, streak 1
+    state = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+
+    // rng always resolves to pinnedId; since it's already used this run, the
+    // draw must fall back to a different entry rather than repeating it.
+    expect(state.pokemonId).not.toBe(pinnedId)
+    expect(state.usedIds.has(pinnedId)).toBe(true)
+    expect(state.usedIds.has(state.pokemonId)).toBe(true)
+    expect(state.usedIds.size).toBe(2)
+  })
+
+  it('resets the exclusion set once the streak breaks', () => {
+    const pinnedId = idAt(0.5)
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    const wrong = state.options.find((o) => o !== state.pokemonId)!
+    state = gameReducer(state, { type: 'GUESS', pokemonId: wrong }) // wrong, streak 0
+    state = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+
+    // The run just restarted, so the exclusion set is empty again and the
+    // pinned draw is free to repeat.
+    expect(state.pokemonId).toBe(pinnedId)
+    expect(state.usedIds.size).toBe(1)
+    expect(state.usedIds.has(pinnedId)).toBe(true)
   })
 })

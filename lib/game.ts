@@ -7,6 +7,20 @@ export type Rng = () => number
 export const randomPokemon = (rng: Rng): PokemonEntry =>
   pokemonList[Math.floor(rng() * pokemonList.length)]
 
+export const randomPokemonExcluding = (rng: Rng, excludeIds: ReadonlySet<number>): PokemonEntry => {
+  let guard = 0
+  let candidate = randomPokemon(rng)
+  while (excludeIds.has(candidate.id) && guard < 1000) {
+    candidate = randomPokemon(rng)
+    guard += 1
+  }
+  if (!excludeIds.has(candidate.id)) return candidate
+  // Guard tripped: an enormous run has nearly exhausted the pool (or a
+  // pathological rng). Deterministically wrap to the first still-unused
+  // entry so the run keeps going instead of stalling.
+  return pokemonList.find((entry) => !excludeIds.has(entry.id)) ?? candidate
+}
+
 const shuffle = <T,>(items: T[], rng: Rng): T[] => {
   const result = [...items]
   for (let i = result.length - 1; i > 0; i -= 1) {
@@ -101,6 +115,10 @@ export type GameState = {
   // changes on NEXT regardless of which entry was drawn, so it — not
   // `pokemonId` — is the correct thing to key a fresh element on.
   roundId: number
+  // Answers drawn so far in the current unbroken streak ("run"). Cleared
+  // whenever a run ends (see the NEXT case) so a fresh run can draw anything
+  // again, including a Pokémon just shown in the run that just ended.
+  usedIds: ReadonlySet<number>
 }
 
 export type GameAction =
@@ -109,17 +127,19 @@ export type GameAction =
   | { type: 'NEXT'; rng: Rng }
   | { type: 'HYDRATE_BEST'; bestStreak: number }
 
-const startRound = (rng: Rng, streak: number): Pick<GameState, 'status' | 'pokemonId' | 'options' | 'guess'> => {
-  const pokemonId = randomPokemon(rng).id
+const startRound = (
+  rng: Rng,
+  streak: number,
+  usedIds: ReadonlySet<number>,
+): Pick<GameState, 'status' | 'pokemonId' | 'options' | 'guess'> => {
+  const pokemonId = randomPokemonExcluding(rng, usedIds).id
   return { status: 'loading', pokemonId, options: generateOptions(pokemonId, streak, rng), guess: null }
 }
 
-export const createInitialState = (rng: Rng): GameState => ({
-  ...startRound(rng, 0),
-  streak: 0,
-  bestStreak: null,
-  roundId: 0,
-})
+export const createInitialState = (rng: Rng): GameState => {
+  const round = startRound(rng, 0, new Set())
+  return { ...round, streak: 0, bestStreak: null, roundId: 0, usedIds: new Set([round.pokemonId]) }
+}
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
@@ -139,8 +159,11 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       }
     }
 
-    case 'NEXT':
-      return { ...state, ...startRound(action.rng, state.streak), roundId: state.roundId + 1 }
+    case 'NEXT': {
+      const usedIds = state.streak === 0 ? new Set<number>() : state.usedIds
+      const round = startRound(action.rng, state.streak, usedIds)
+      return { ...state, ...round, usedIds: new Set(usedIds).add(round.pokemonId), roundId: state.roundId + 1 }
+    }
 
     case 'HYDRATE_BEST':
       return { ...state, bestStreak: Math.max(action.bestStreak, state.bestStreak ?? 0) }
