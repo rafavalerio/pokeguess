@@ -55,8 +55,9 @@ affordances that would render the raw image and leak the answer — long-press
 callout, drag preview, "open image in new tab".
 
 There is no backend: no API routes, no database. The only persisted state is the
-best streak in `localStorage`, written best-effort so the game still plays when
-site data is blocked.
+best streak, the current streak and the run's used-Pokémon set in
+`localStorage`, written best-effort so the game still plays (without a
+restored run) when site data is blocked.
 
 ## Layout
 

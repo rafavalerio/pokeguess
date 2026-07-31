@@ -263,6 +263,55 @@ describe('no-repeat within a run', () => {
   })
 })
 
+describe('HYDRATE_RUN', () => {
+  it('ignores a stored streak of zero, keeping the freshly drawn round', () => {
+    const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    const hydrated = gameReducer(state, {
+      type: 'HYDRATE_RUN',
+      rng: makeRng([0.5]),
+      streak: 0,
+      usedIds: new Set(),
+    })
+    expect(hydrated).toBe(state)
+  })
+
+  it('restores the streak and redraws a round excluding the stored usedIds', () => {
+    const pinnedId = idAt(0.5)
+    const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    const usedIds = new Set([pinnedId])
+
+    const hydrated = gameReducer(state, {
+      type: 'HYDRATE_RUN',
+      rng: makeRng([0.5]),
+      streak: 4,
+      usedIds,
+    })
+
+    expect(hydrated.streak).toBe(4)
+    // rng always resolves to pinnedId, which is already in the restored
+    // usedIds, so the redraw must fall back to a different entry.
+    expect(hydrated.pokemonId).not.toBe(pinnedId)
+    expect(hydrated.usedIds.has(pinnedId)).toBe(true)
+    expect(hydrated.usedIds.has(hydrated.pokemonId)).toBe(true)
+    expect(hydrated.status).toBe('loading')
+  })
+
+  it('goes straight to won when the stored usedIds already covers the whole pool', () => {
+    const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    const usedIds = allUsedIds()
+
+    const hydrated = gameReducer(state, {
+      type: 'HYDRATE_RUN',
+      rng: makeRng([0.5]),
+      streak: pokemonList.length,
+      usedIds,
+    })
+
+    expect(hydrated.status).toBe('won')
+    expect(hydrated.streak).toBe(pokemonList.length)
+  })
+})
+
 describe('winning the game', () => {
   it('reveals the final correct guess normally, without winning yet', () => {
     const lastId = pokemonList[0].id

@@ -126,6 +126,7 @@ export type GameAction =
   | { type: 'GUESS'; pokemonId: number }
   | { type: 'NEXT'; rng: Rng }
   | { type: 'HYDRATE_BEST'; bestStreak: number }
+  | { type: 'HYDRATE_RUN'; rng: Rng; streak: number; usedIds: ReadonlySet<number> }
 
 const startRound = (
   rng: Rng,
@@ -176,6 +177,26 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 
     case 'HYDRATE_BEST':
       return { ...state, bestStreak: Math.max(action.bestStreak, state.bestStreak ?? 0) }
+
+    case 'HYDRATE_RUN': {
+      // A freshly mounted game already drew a loading round with an empty
+      // exclusion set (see createInitialState); nothing to restore for a run
+      // that hadn't started yet.
+      if (action.streak === 0) return state
+      if (action.usedIds.size === pokemonList.length) {
+        // The stored run had already exhausted the pool; land on the win
+        // screen directly rather than drawing a round no distractor pool exists for.
+        return { ...state, streak: action.streak, usedIds: action.usedIds, status: 'won' }
+      }
+      const round = startRound(action.rng, action.streak, action.usedIds)
+      return {
+        ...state,
+        ...round,
+        streak: action.streak,
+        usedIds: new Set(action.usedIds).add(round.pokemonId),
+        roundId: state.roundId + 1,
+      }
+    }
 
     default:
       return state

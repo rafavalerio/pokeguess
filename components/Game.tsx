@@ -11,6 +11,8 @@ import { createInitialState, gameReducer, type Rng } from '@/lib/game'
 import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const BEST_STREAK_KEY = 'bestStreak'
+const STREAK_KEY = 'streak'
+const USED_IDS_KEY = 'usedIds'
 const rng: Rng = () => Math.random()
 
 // createInitialState draws from Math.random, so the state it produces
@@ -67,13 +69,26 @@ const Game = () => {
 
   useEffect(() => {
     try {
-      const stored = Number(localStorage.getItem(BEST_STREAK_KEY))
-      if (Number.isFinite(stored) && stored > 0) {
-        dispatch({ type: 'HYDRATE_BEST', bestStreak: Math.floor(stored) })
+      const storedBest = Number(localStorage.getItem(BEST_STREAK_KEY))
+      if (Number.isFinite(storedBest) && storedBest > 0) {
+        dispatch({ type: 'HYDRATE_BEST', bestStreak: Math.floor(storedBest) })
+      }
+
+      const storedStreak = Number(localStorage.getItem(STREAK_KEY))
+      const storedUsedIds: unknown = JSON.parse(localStorage.getItem(USED_IDS_KEY) ?? '[]')
+      if (
+        Number.isFinite(storedStreak) &&
+        storedStreak > 0 &&
+        Array.isArray(storedUsedIds) &&
+        storedUsedIds.length > 0 &&
+        storedUsedIds.every((id) => typeof id === 'number')
+      ) {
+        dispatch({ type: 'HYDRATE_RUN', rng, streak: Math.floor(storedStreak), usedIds: new Set(storedUsedIds) })
       }
     } catch {
       // localStorage can throw (e.g. SecurityError when site data is
-      // blocked); the game is still playable without a persisted best streak.
+      // blocked), or the stored usedIds can fail to parse; the game is still
+      // playable without a restored run.
     }
   }, [])
 
@@ -86,6 +101,15 @@ const Game = () => {
       }
     }
   }, [state.bestStreak])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STREAK_KEY, String(state.streak))
+      localStorage.setItem(USED_IDS_KEY, JSON.stringify([...state.usedIds]))
+    } catch {
+      // See the read effect above: persistence is best-effort.
+    }
+  }, [state.streak, state.usedIds])
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
   const revealed = mounted && state.status === 'revealed'

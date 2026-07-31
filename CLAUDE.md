@@ -7,7 +7,8 @@ Guidance for Claude Code when working in this repository.
 Pokéguess: a single-screen game that shows a Pokémon silhouette and four name
 options. Next 16 App Router, React 19, TypeScript 6, Tailwind v4, Vitest.
 There is no backend, no database and no API route — sprites come from a static
-GitHub repo, and the only persisted state is `bestStreak` in `localStorage`.
+GitHub repo, and the only persisted state is `bestStreak`, `streak` and
+`usedIds` in `localStorage`.
 
 ## Commands
 
@@ -91,6 +92,15 @@ grows to cover the entire `pokemonList`, that's a win: `Status` gains
 `'won'`, set on the `NEXT` after the last correct guess (not on the `GUESS`
 itself, so the final reveal is still shown first) — no new round is drawn at
 that point, so `roundId` is untouched by it.
+
+`streak` and `usedIds` are persisted to `localStorage` alongside `bestStreak`
+(`components/Game.tsx`) so a refresh mid-run doesn't lose progress. Restoring
+them happens the same way `bestStreak` is restored — a `HYDRATE_RUN` action
+dispatched from a mount effect, after the initial (server-matching) round has
+already rendered, so it doesn't trip the hydration constraint above. Because
+the initial round was drawn with an empty exclusion set, `HYDRATE_RUN` redraws
+the round against the restored `usedIds` — same as a normal `NEXT` — rather
+than trusting the pre-hydration draw not to collide with a restored id.
 
 ### Hiding the answer
 

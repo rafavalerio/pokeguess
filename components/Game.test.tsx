@@ -135,6 +135,51 @@ describe('Game', () => {
     expect(await screen.findByTestId('stat-best')).toHaveTextContent('12')
   })
 
+  it('persists the streak and used ids to localStorage on a correct guess', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
+
+    expect(localStorage.getItem('streak')).toBe('1')
+    expect(JSON.parse(localStorage.getItem('usedIds')!)).toEqual([pinnedAnswerId])
+  })
+
+  it('resets the persisted streak and used ids on a wrong guess', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = screen
+      .getAllByRole('button')
+      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    await user.click(wrong)
+
+    expect(localStorage.getItem('streak')).toBe('0')
+  })
+
+  it('restores a stored streak and used ids on mount, resuming the run', async () => {
+    // pinnedAnswerId is excluded via a stored usedIds entry, so with
+    // Math.random pinned to 0.5 every draw attempt keeps landing on it and
+    // falls through to randomPokemonExcluding's deterministic fallback: the
+    // first pokemonList entry that isn't excluded.
+    localStorage.setItem('streak', '4')
+    localStorage.setItem('usedIds', JSON.stringify([pinnedAnswerId]))
+    render(<Game />)
+
+    expect(await screen.findByTestId('stat-streak')).toHaveTextContent('4')
+    const nextAnswerId = pokemonList.find((entry) => entry.id !== pinnedAnswerId)!.id
+    expect(await screen.findByRole('button', { name: getPokemonName(nextAnswerId) })).toBeInTheDocument()
+  })
+
+  it('ignores a stored run with a zero streak, starting fresh', async () => {
+    localStorage.setItem('streak', '0')
+    localStorage.setItem('usedIds', JSON.stringify([]))
+    render(<Game />)
+
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedAnswerId) })).toBeInTheDocument()
+  })
+
   it('stays playable across NEXT when the same Pokémon is drawn twice in a row', async () => {
     // Math.random is pinned to 0.5, so any round drawn with an empty
     // no-repeat exclusion set resolves to pinnedAnswerId (see lib/game.ts's
