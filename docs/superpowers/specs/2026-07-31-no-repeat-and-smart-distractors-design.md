@@ -20,14 +20,16 @@ place so they're easy to retune later without touching logic.
 
 In scope: not repeating the answer within an unbroken streak; making some
 wrong options harder to rule out as the streak grows; a config module for the
-new tunables.
+new tunables; a win condition when a run exhausts the entire pool.
 
 Out of scope (explicitly, re-evaluate if this changes): fetching real
 evolution-chain data from PokeAPI (the "same family" check stays a
 `speciesDex`-proximity heuristic, not authoritative evolution data); excluding
 previously-seen Pokémon from ever appearing as a *wrong* option (only the
 answer is guaranteed fresh); persisting `usedIds` across a page reload (it's
-in-memory reducer state, same lifetime as `streak`).
+in-memory reducer state, same lifetime as `streak`); designing the
+congratulations screen's visuals — this spec covers the mechanics and a
+minimal placeholder message, not the final presentation.
 
 ## No-repeat within a run
 
@@ -80,19 +82,61 @@ const startRound = (
 `NEXT` reducer case resets `usedIds` to empty exactly when the streak that
 just ended was broken (`state.streak === 0` — `GUESS` already zeroed it before
 `NEXT` is ever dispatched, so this check alone distinguishes "run continues"
-from "run just ended"), then adds the new round's draw:
+from "run just ended"), then adds the new round's draw. The full `NEXT` case
+— including what happens when the pool runs out — is in "Winning the game"
+below.
+
+Repeats are blocked by exact `id`, not species — a base form and its Mega/
+regional/Gigantamax forms are distinct ids and can each independently be the
+answer within the same run.
+
+## Winning the game
+
+If a run's `usedIds` ever grows to cover the entire pool, there's nothing
+left to draw — the player has correctly named every entry in `pokemonList`
+without a single wrong guess in between. That's a win, not an edge case to
+paper over.
+
+`Status` gains a fourth value: `'loading' | 'guessing' | 'revealed' | 'won'`.
+
+`GUESS` is unchanged — the final correct guess reveals exactly like any other
+(checkmark, name, streak increment). The transition to `'won'` happens on the
+*next* `NEXT`, so the player always sees that last reveal before the screen
+changes:
 
 ```ts
 case 'NEXT': {
+  if (state.status === 'won') {
+    // "Start again" from the win screen: a full reset, same as a broken streak.
+    const round = startRound(action.rng, 0, new Set())
+    return { ...state, ...round, streak: 0, usedIds: new Set([round.pokemonId]), roundId: state.roundId + 1 }
+  }
+  if (state.streak > 0 && state.usedIds.size === pokemonList.length) {
+    // The round just revealed was the last unused entry in the pool.
+    return { ...state, status: 'won' }
+  }
   const usedIds = state.streak === 0 ? new Set<number>() : state.usedIds
   const round = startRound(action.rng, state.streak, usedIds)
   return { ...state, ...round, usedIds: new Set(usedIds).add(round.pokemonId), roundId: state.roundId + 1 }
 }
 ```
 
-Repeats are blocked by exact `id`, not species — a base form and its Mega/
-regional/Gigantamax forms are distinct ids and can each independently be the
-answer within the same run.
+This makes the wrap-around fallback inside `randomPokemonExcluding` (see
+above) unreachable in normal play — the pool is never actually asked to yield
+a draw once it's exhausted, because the second branch here catches that
+exact moment first. The fallback stays in as defensive code, not as the
+mechanism this relies on.
+
+`components/Game.tsx` gets a `state.status === 'won'` branch that replaces
+the silhouette and guess grid with a plain message block — final streak,
+minimal copy for now, easy to reskin later. The advance button's
+enabled/label logic (currently `revealed = mounted && state.status ===
+'revealed'`, disabled when `!revealed`, labelled "Start again" when the
+guess was wrong) extends to treat `'won'` the same way as a wrong-guess
+reveal: enabled, labelled "Start again". The existing Space/N keyboard
+handler extends the same way — Space advances for both `'revealed'` and
+`'won'`; `N` stays scoped to "Next" specifically (`status === 'revealed' &&
+guess === pokemonId`), so it does nothing on the win screen.
 
 ## Difficulty-scaled distractors
 
@@ -246,12 +290,25 @@ avoid (see CLAUDE.md's hydration-constraint section).
 - `lib/game.test.ts` (extended): the reducer accumulates `usedIds` across
   consecutive correct-guess `NEXT`s and resets it after a wrong-guess `NEXT`,
   with a scripted rng verifying the excluded id is never redrawn.
+- `lib/game.test.ts` (extended): a scripted state with `usedIds` one short of
+  `pokemonList.length` and `streak > 0` — a correct `GUESS` still reveals
+  normally (`status: 'revealed'`, unchanged from any other correct guess);
+  the following `NEXT` transitions to `status: 'won'` without drawing a new
+  round; a further `NEXT` from `'won'` resets `streak` to 0, `usedIds` to a
+  fresh single-entry set, and draws normally again.
 - `components/Game.test.tsx`: unchanged. It never drives the streak past a
   correct guess or two, so it stays within the `streak = 0`/early-band
-  behavior and needs no updates.
+  behavior and needs no updates. (A dedicated win-screen UI test isn't worth
+  scripting a full pool exhaustion through React Testing Library — the
+  reducer tests above already cover the transition; once the screen's actual
+  design lands, that's the natural point to add a UI test for it.)
 
 ## Docs
 
 CLAUDE.md's architecture section gets a short addition describing
 `lib/gameConfig.ts`'s role and pointing at it as where to retune difficulty,
-alongside the existing `lib/game.ts` description.
+alongside the existing `lib/game.ts` description, plus a one-line mention of
+the `'won'` status and what triggers it, next to the existing "Why `roundId`
+exists" explanation (roundId is untouched by the win transition itself, since
+no new round is drawn at that moment — worth stating explicitly so it doesn't
+look like an oversight).
