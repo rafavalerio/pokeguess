@@ -51,6 +51,11 @@ the hand-maintained lookup layer over it (`getPokemonEntry`, `getPokemonName`,
 `getSpeciesDex`), keyed by `id` rather than array index since ids are no
 longer contiguous once forms are included.
 
+**`lib/gameConfig.ts`** holds the tunable difficulty numbers — `DIFFICULTY_CURVE`
+(how many "hard" distractors appear per streak band), `DEX_PROXIMITY` and
+`SIMILARITY_THRESHOLD` (what counts as a "hard" distractor). Retuning
+difficulty is an edit to this file, not to `lib/game.ts`'s logic.
+
 ### The hydration constraint
 
 This is the single most important thing to understand before editing `Game.tsx`
@@ -75,6 +80,17 @@ it has to sit behind the `mounted` check.
 `pokemonId` unchanged, so an `<img>` keyed on `pokemonId` would not remount, no
 `load` event would fire, and the round would be stranded in `'loading'`
 forever. Key and re-run effects on `roundId`, never on `pokemonId`.
+
+### No-repeat draws and winning
+
+`GameState.usedIds` tracks every Pokémon drawn as the answer during the
+current unbroken streak ("run"); the next draw excludes it
+(`randomPokemonExcluding`), so the same Pokémon never repeats within a run.
+It resets the moment a run ends (a wrong guess). If a run's `usedIds` ever
+grows to cover the entire `pokemonList`, that's a win: `Status` gains
+`'won'`, set on the `NEXT` after the last correct guess (not on the `GUESS`
+itself, so the final reveal is still shown first) — no new round is drawn at
+that point, so `roundId` is untouched by it.
 
 ### Hiding the answer
 
