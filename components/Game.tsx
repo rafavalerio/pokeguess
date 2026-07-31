@@ -159,8 +159,20 @@ const Game = () => {
         type="button"
         onClick={() => dispatch({ type: 'NEXT', rng })}
         disabled={!revealed}
-        className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 w-full select-none rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
+        className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
       >
+        {/* The Space-bar hint mirrors the guess grid's number badges: same
+            bordered box, same "only visible while the shortcut works" rule
+            (revealed, sm and up), just with an underscore standing in for
+            the spacebar. */}
+        {revealed && (
+          <span
+            aria-hidden="true"
+            className="text-button/40 hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex"
+          >
+            _
+          </span>
+        )}
         {revealed && state.guess !== state.pokemonId ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>

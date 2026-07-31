@@ -23,7 +23,7 @@ export const guessButtonClassName = (state: GuessState): string =>
 // shows while that shortcut is live (idle, i.e. still guessing) and only on
 // screens with a keyboard (sm and up) — on mobile it's just the name.
 const markerClassName =
-  'text-ink-soft hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex'
+  'text-ink-soft/40 hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex'
 
 type Props = {
   pokemonId: number
