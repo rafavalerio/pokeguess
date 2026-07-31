@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { pokemonList } from './pokemonData'
-import { createInitialState, gameReducer, generateOptions, randomPokemon, type Rng } from './game'
+import { createInitialState, gameReducer, generateOptions, isHardDistractor, randomPokemon, spellingSimilarity, type Rng } from './game'
 
 const makeRng = (values: number[]): Rng => {
   let i = 0
@@ -20,25 +20,25 @@ describe('randomPokemon', () => {
 describe('generateOptions', () => {
   it('always includes the answer', () => {
     for (let seed = 0; seed < 50; seed += 1) {
-      const options = generateOptions(42, makeRng([seed / 50]))
+      const options = generateOptions(42, 0, makeRng([seed / 50]))
       expect(options).toContain(42)
     }
   })
 
   it('returns exactly four options', () => {
-    expect(generateOptions(42, makeRng([0.1, 0.2, 0.3]))).toHaveLength(4)
+    expect(generateOptions(42, 0, makeRng([0.1, 0.2, 0.3]))).toHaveLength(4)
   })
 
   it('never returns duplicates', () => {
     for (let seed = 0; seed < 50; seed += 1) {
-      const options = generateOptions(42, makeRng([seed / 50]))
+      const options = generateOptions(42, 0, makeRng([seed / 50]))
       expect(new Set(options).size).toBe(4)
     }
   })
 
   it('only returns ids that exist in pokemonList', () => {
     for (let seed = 0; seed < 50; seed += 1) {
-      for (const option of generateOptions(42, makeRng([seed / 50]))) {
+      for (const option of generateOptions(42, 0, makeRng([seed / 50]))) {
         expect(validIds.has(option)).toBe(true)
       }
     }
@@ -46,7 +46,7 @@ describe('generateOptions', () => {
 
   it('makes progress even when the rng keeps returning the answer', () => {
     const answerDraw = 41 / pokemonList.length // resolves to pokemonList[41], id 42
-    expect(generateOptions(42, makeRng([answerDraw, 0.5, 0.6, 0.7]))).toHaveLength(4)
+    expect(generateOptions(42, 0, makeRng([answerDraw, 0.5, 0.6, 0.7]))).toHaveLength(4)
   })
 })
 
@@ -131,5 +131,65 @@ describe('gameReducer', () => {
     // change to pokemonList's ordering fails loudly here instead of as a
     // confusing unrelated-looking failure in the component tests.
     expect(randomPokemon(() => 0.5).id).toBe(pinnedAnswerId)
+  })
+})
+
+describe('spellingSimilarity', () => {
+  it('scores identical-after-normalizing names as a perfect match', () => {
+    // Nidoran♀ / Nidoran♂ normalize to the same string once the gender
+    // symbols are stripped.
+    expect(spellingSimilarity('Nidoran♀', 'Nidoran♂')).toBe(1)
+  })
+
+  it('scores names with no meaningful overlap as low similarity', () => {
+    expect(spellingSimilarity('Weedle', 'Kakuna')).toBeLessThan(0.5)
+    expect(spellingSimilarity('Bulbasaur', 'Mewtwo')).toBeLessThan(0.5)
+  })
+})
+
+const findEntry = (id: number) => pokemonList.find((e) => e.id === id)!
+
+describe('isHardDistractor', () => {
+  const weedle = findEntry(13)
+  const kakuna = findEntry(14)
+  const nidoranFemale = findEntry(29)
+  const nidoranMale = findEntry(32)
+  const bulbasaur = findEntry(1)
+  const mewtwo = findEntry(150)
+
+  it('is true for dex-adjacent entries even with dissimilar names', () => {
+    expect(isHardDistractor(kakuna, weedle)).toBe(true)
+  })
+
+  it('is true for similarly-spelled entries even when far apart in the dex', () => {
+    expect(Math.abs(nidoranFemale.speciesDex - nidoranMale.speciesDex)).toBeGreaterThan(2)
+    expect(isHardDistractor(nidoranFemale, nidoranMale)).toBe(true)
+  })
+
+  it('is false when neither signal matches', () => {
+    expect(isHardDistractor(bulbasaur, mewtwo)).toBe(false)
+  })
+})
+
+describe('generateOptions scales hard distractors with streak', () => {
+  const kakunaId = 14 // dex 14; Butterfree(12)/Weedle(13)/Beedrill(15)/Pidgey(16) are all dex-adjacent hard candidates
+  const kakuna = pokemonList.find((entry) => entry.id === kakunaId)!
+  const hardCountIn = (options: number[]) =>
+    options.filter(
+      (id) => id !== kakunaId && isHardDistractor(kakuna, pokemonList.find((entry) => entry.id === id)!),
+    ).length
+
+  it('always includes at least one hard distractor once the streak reaches the first band (3-7)', () => {
+    for (let seed = 0; seed < 20; seed += 1) {
+      const options = generateOptions(kakunaId, 3, makeRng([seed / 20, 0.11, 0.22, 0.33, 0.44]))
+      expect(hardCountIn(options)).toBeGreaterThanOrEqual(1)
+    }
+  })
+
+  it('always includes at least two hard distractors once the streak reaches the second band (8-14)', () => {
+    for (let seed = 0; seed < 20; seed += 1) {
+      const options = generateOptions(kakunaId, 8, makeRng([seed / 20, 0.11, 0.22, 0.33, 0.44]))
+      expect(hardCountIn(options)).toBeGreaterThanOrEqual(2)
+    }
   })
 })

@@ -1,3 +1,5 @@
+import { DEX_PROXIMITY, SIMILARITY_THRESHOLD, hardDistractorCountForStreak } from './gameConfig'
+import { getPokemonEntry } from './pokemon'
 import { pokemonList, type PokemonEntry } from './pokemonData'
 
 export type Rng = () => number
@@ -14,8 +16,58 @@ const shuffle = <T,>(items: T[], rng: Rng): T[] => {
   return result
 }
 
-export const generateOptions = (answerId: number, rng: Rng): number[] => {
+const normalizeName = (name: string): string =>
+  name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // strip accents (Flabébé -> flabebe)
+    .replace(/[^a-z0-9]/gi, '') // strip spaces, punctuation, gender symbols
+    .toLowerCase()
+
+const levenshteinDistance = (a: string, b: string): number => {
+  const rows = a.length + 1
+  const cols = b.length + 1
+  const dp: number[][] = Array.from({ length: rows }, () => Array.from({ length: cols }, () => 0))
+  for (let i = 0; i < rows; i += 1) dp[i][0] = i
+  for (let j = 0; j < cols; j += 1) dp[0][j] = j
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost)
+    }
+  }
+  return dp[rows - 1][cols - 1]
+}
+
+export const spellingSimilarity = (nameA: string, nameB: string): number => {
+  const a = normalizeName(nameA)
+  const b = normalizeName(nameB)
+  const maxLen = Math.max(a.length, b.length)
+  return maxLen === 0 ? 0 : 1 - levenshteinDistance(a, b) / maxLen
+}
+
+export const isHardDistractor = (answer: PokemonEntry, candidate: PokemonEntry): boolean =>
+  Math.abs(answer.speciesDex - candidate.speciesDex) <= DEX_PROXIMITY ||
+  spellingSimilarity(answer.name, candidate.name) >= SIMILARITY_THRESHOLD
+
+export const generateOptions = (answerId: number, streak: number, rng: Rng): number[] => {
+  const answer = getPokemonEntry(answerId)
+  const hardTarget = hardDistractorCountForStreak(streak)
   const options = new Set<number>([answerId])
+
+  // Skipped entirely at hardTarget 0 (streak 0-2) so the rng call sequence
+  // — and therefore every existing scripted-rng test — is untouched at low
+  // streaks. See this task's note above.
+  if (hardTarget > 0) {
+    const hardCandidates = shuffle(
+      pokemonList.filter((entry) => entry.id !== answerId && isHardDistractor(answer, entry)),
+      rng,
+    )
+    for (const candidate of hardCandidates) {
+      if (options.size >= 1 + hardTarget) break
+      options.add(candidate.id)
+    }
+  }
+
   let guard = 0
   while (options.size < 4 && guard < 1000) {
     options.add(randomPokemon(rng).id)
@@ -57,13 +109,13 @@ export type GameAction =
   | { type: 'NEXT'; rng: Rng }
   | { type: 'HYDRATE_BEST'; bestStreak: number }
 
-const startRound = (rng: Rng): Pick<GameState, 'status' | 'pokemonId' | 'options' | 'guess'> => {
+const startRound = (rng: Rng, streak: number): Pick<GameState, 'status' | 'pokemonId' | 'options' | 'guess'> => {
   const pokemonId = randomPokemon(rng).id
-  return { status: 'loading', pokemonId, options: generateOptions(pokemonId, rng), guess: null }
+  return { status: 'loading', pokemonId, options: generateOptions(pokemonId, streak, rng), guess: null }
 }
 
 export const createInitialState = (rng: Rng): GameState => ({
-  ...startRound(rng),
+  ...startRound(rng, 0),
   streak: 0,
   bestStreak: null,
   roundId: 0,
@@ -88,7 +140,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
 
     case 'NEXT':
-      return { ...state, ...startRound(action.rng), roundId: state.roundId + 1 }
+      return { ...state, ...startRound(action.rng, state.streak), roundId: state.roundId + 1 }
 
     case 'HYDRATE_BEST':
       return { ...state, bestStreak: Math.max(action.bestStreak, state.bestStreak ?? 0) }
