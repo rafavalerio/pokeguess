@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 
+import type { Status } from '@/lib/game'
 import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const SPRITE_BASE =
@@ -11,7 +12,7 @@ const SPRITE_BASE =
 type Props = {
   pokemonId: number
   roundId: number
-  status: 'loading' | 'guessing' | 'revealed'
+  status: Status
   onReady: () => void
 }
 

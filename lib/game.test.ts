@@ -1,7 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
 import { pokemonList } from './pokemonData'
-import { createInitialState, gameReducer, generateOptions, isHardDistractor, randomPokemon, randomPokemonExcluding, spellingSimilarity, type Rng } from './game'
+import {
+  createInitialState,
+  gameReducer,
+  generateOptions,
+  isHardDistractor,
+  randomPokemon,
+  randomPokemonExcluding,
+  spellingSimilarity,
+  type GameState,
+  type Rng,
+} from './game'
 
 const makeRng = (values: number[]): Rng => {
   let i = 0
@@ -11,6 +21,8 @@ const makeRng = (values: number[]): Rng => {
 const validIds = new Set(pokemonList.map((entry) => entry.id))
 
 const idAt = (rngValue: number) => pokemonList[Math.floor(rngValue * pokemonList.length)].id
+
+const allUsedIds = (): ReadonlySet<number> => new Set(pokemonList.map((entry) => entry.id))
 
 describe('randomPokemon', () => {
   it('maps 0 to the first entry and just under 1 to the last entry', () => {
@@ -248,5 +260,67 @@ describe('no-repeat within a run', () => {
     expect(state.pokemonId).toBe(pinnedId)
     expect(state.usedIds.size).toBe(1)
     expect(state.usedIds.has(pinnedId)).toBe(true)
+  })
+})
+
+describe('winning the game', () => {
+  it('reveals the final correct guess normally, without winning yet', () => {
+    const lastId = pokemonList[0].id
+    const state: GameState = {
+      status: 'guessing',
+      pokemonId: lastId,
+      options: [lastId, pokemonList[1].id, pokemonList[2].id, pokemonList[3].id],
+      guess: null,
+      streak: 5,
+      bestStreak: 5,
+      roundId: 5,
+      usedIds: allUsedIds(),
+    }
+
+    const revealed = gameReducer(state, { type: 'GUESS', pokemonId: lastId })
+
+    expect(revealed.status).toBe('revealed')
+    expect(revealed.streak).toBe(6)
+  })
+
+  it('transitions to won on the NEXT after the last correct guess, without drawing a new round', () => {
+    const lastId = pokemonList[0].id
+    const state: GameState = {
+      status: 'revealed',
+      pokemonId: lastId,
+      options: [lastId, pokemonList[1].id, pokemonList[2].id, pokemonList[3].id],
+      guess: lastId,
+      streak: 6,
+      bestStreak: 6,
+      roundId: 5,
+      usedIds: allUsedIds(),
+    }
+
+    const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+
+    expect(won.status).toBe('won')
+    expect(won.pokemonId).toBe(lastId)
+    expect(won.streak).toBe(6)
+  })
+
+  it('starts a completely fresh run from the won screen', () => {
+    const state: GameState = {
+      status: 'won',
+      pokemonId: pokemonList[0].id,
+      options: pokemonList.slice(0, 4).map((entry) => entry.id),
+      guess: pokemonList[0].id,
+      streak: pokemonList.length,
+      bestStreak: pokemonList.length,
+      roundId: 5,
+      usedIds: allUsedIds(),
+    }
+
+    const restarted = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+
+    expect(restarted.status).toBe('loading')
+    expect(restarted.streak).toBe(0)
+    expect(restarted.usedIds.size).toBe(1)
+    expect(restarted.usedIds.has(restarted.pokemonId)).toBe(true)
+    expect(restarted.bestStreak).toBe(pokemonList.length) // untouched by a restart
   })
 })

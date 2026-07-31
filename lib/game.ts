@@ -99,7 +99,7 @@ export const generateOptions = (answerId: number, streak: number, rng: Rng): num
   return shuffle([...options], rng)
 }
 
-export type Status = 'loading' | 'guessing' | 'revealed'
+export type Status = 'loading' | 'guessing' | 'revealed' | 'won'
 
 export type GameState = {
   status: Status
@@ -160,6 +160,15 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
 
     case 'NEXT': {
+      if (state.status === 'won') {
+        // "Start again" from the win screen: a full reset, same as a broken streak.
+        const round = startRound(action.rng, 0, new Set())
+        return { ...state, ...round, streak: 0, usedIds: new Set([round.pokemonId]), roundId: state.roundId + 1 }
+      }
+      if (state.streak > 0 && state.usedIds.size === pokemonList.length) {
+        // The round just revealed was the last unused entry in the pool.
+        return { ...state, status: 'won' }
+      }
       const usedIds = state.streak === 0 ? new Set<number>() : state.usedIds
       const round = startRound(action.rng, state.streak, usedIds)
       return { ...state, ...round, usedIds: new Set(usedIds).add(round.pokemonId), roundId: state.roundId + 1 }
