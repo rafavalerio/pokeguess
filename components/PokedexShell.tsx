@@ -45,16 +45,16 @@ const PokedexShell = ({ children, onHome }: Props) => {
           <Lamp className="bg-lamp-green size-3" />
         </div>
         {onHome && (
-          // Same red as the shell it sits on, molded rather than pasted on:
-          // a lighter bevel (border-shell-edge) on the top/left catches the
-          // light, a darker one (border-shell-dark) on the bottom/right reads
-          // as shadow, and the icon sits at half-opacity so it looks pressed
-          // into the plastic instead of printed on top of it.
+          // Molded into the shell rather than pasted on top: a uniform
+          // shell-edge bezel all round, a diagonal fill that lightens toward
+          // the bottom right (like light catching a domed plastic button),
+          // and the icon in the darkest red so it reads as pressed into the
+          // material instead of printed on it.
           <button
             type="button"
             onClick={onHome}
             aria-label="Home"
-            className="bg-shell text-button/60 border-t-shell-edge border-l-shell-edge border-r-shell-dark border-b-shell-dark enabled:hover:bg-shell-dark enabled:hover:text-button/80 focus-visible:ring-screen flex items-center justify-center rounded-lg border-2 px-3 py-2 transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-[0.99]"
+            className="bg-gradient-to-br from-shell to-shell-edge text-shell-dark border-shell-edge enabled:hover:brightness-110 focus-visible:ring-screen flex items-center justify-center rounded-lg border-2 px-3 py-2 transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-[0.99] enabled:active:brightness-95"
           >
             <Home className="size-4" aria-hidden="true" />
           </button>
