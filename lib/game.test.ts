@@ -312,6 +312,40 @@ describe('HYDRATE_RUN', () => {
   })
 })
 
+describe('RESTART', () => {
+  it('abandons an in-progress run: streak and usedIds reset, a fresh round is drawn', () => {
+    const pinnedId = idAt(0.5)
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, streak 1
+    expect(state.streak).toBe(1)
+
+    const restarted = gameReducer(state, { type: 'RESTART', rng: makeRng([0.5]) })
+
+    expect(restarted.streak).toBe(0)
+    expect(restarted.status).toBe('loading')
+    expect(restarted.pokemonId).toBe(pinnedId)
+    expect(restarted.usedIds.size).toBe(1)
+    expect(restarted.usedIds.has(restarted.pokemonId)).toBe(true)
+  })
+
+  it('leaves the best streak untouched', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, streak 1, bestStreak 1
+
+    const restarted = gameReducer(state, { type: 'RESTART', rng: makeRng([0.5]) })
+
+    expect(restarted.bestStreak).toBe(1)
+  })
+
+  it('increments roundId, matching NEXT and HYDRATE_RUN', () => {
+    const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    const restarted = gameReducer(state, { type: 'RESTART', rng: makeRng([0.5]) })
+    expect(restarted.roundId).toBe(state.roundId + 1)
+  })
+})
+
 describe('winning the game', () => {
   it('reveals the final correct guess normally, without winning yet', () => {
     const lastId = pokemonList[0].id

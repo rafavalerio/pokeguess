@@ -1,10 +1,18 @@
 'use client'
 
+import { Home } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 const Lamp = ({ className }: { className: string }) => (
   <span className={`rounded-full ${className}`} aria-hidden="true" />
 )
+
+type Props = {
+  children: React.ReactNode
+  // Only the game screen has somewhere to go "home" to; the menu and stats
+  // screens are already home, so they render the shell without this prop.
+  onHome?: () => void
+}
 
 // The screen's content changes height across views (menu vs. stats vs. a
 // round vs. the win screen), which would otherwise snap instantly. Tracking
@@ -12,7 +20,7 @@ const Lamp = ({ className }: { className: string }) => (
 // wrapper to it gives every one of those swaps the same smooth resize,
 // without hardcoding per-view heights. Starts at 'auto' so the very first
 // paint (server and client alike) sizes to content with no observer needed.
-const PokedexShell = ({ children }: { children: React.ReactNode }) => {
+const PokedexShell = ({ children, onHome }: Props) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState<number | 'auto'>('auto')
 
@@ -30,10 +38,22 @@ const PokedexShell = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <div className="bg-shell border-shell-edge w-full max-w-md rounded-2xl border-4 p-4 sm:p-5">
-      <div className="mb-4 flex items-center gap-2">
-        <Lamp className="bg-lamp-blue border-screen size-7 border-2" />
-        <Lamp className="bg-lamp-amber size-3" />
-        <Lamp className="bg-lamp-green size-3" />
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Lamp className="bg-lamp-blue border-screen size-7 border-2" />
+          <Lamp className="bg-lamp-amber size-3" />
+          <Lamp className="bg-lamp-green size-3" />
+        </div>
+        {onHome && (
+          <button
+            type="button"
+            onClick={onHome}
+            aria-label="Home"
+            className="text-button/80 enabled:hover:text-button enabled:hover:bg-shell-dark focus-visible:ring-screen flex size-7 items-center justify-center rounded-full transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-95"
+          >
+            <Home className="size-4" aria-hidden="true" />
+          </button>
+        )}
       </div>
       <div
         className="bg-screen overflow-hidden rounded-xl transition-[height] duration-300 ease-in-out"

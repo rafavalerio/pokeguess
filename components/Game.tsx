@@ -159,7 +159,12 @@ const Game = () => {
         <MainMenu
           mode={view}
           bestStreak={state.bestStreak}
+          canContinue={state.streak > 0}
           onPlay={() => setView('game')}
+          onStartAgain={() => {
+            dispatch({ type: 'RESTART', rng })
+            setView('game')
+          }}
           onShowStats={() => setView('stats')}
           onBack={() => setView('menu')}
         />
@@ -168,7 +173,7 @@ const Game = () => {
   }
 
   return (
-    <PokedexShell>
+    <PokedexShell onHome={() => setView('menu')}>
       {/*
         Onest's geometric letterforms carry a lot of sidebearing at display
         sizes, so the title takes negative tracking to keep it feeling like one

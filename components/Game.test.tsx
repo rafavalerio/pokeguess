@@ -30,13 +30,29 @@ vi.mock('next/image', async () => {
 })
 
 // Game now opens on the main menu; every test below exercises the game
-// screen itself, so this renders and immediately clicks past the menu.
+// screen itself, so this renders and immediately clicks past the menu. The
+// button reads "Continue" instead of "Play" whenever a stored run is
+// restored (see components/MainMenu.tsx), so this matches either.
 const renderGame = async (): Promise<UserEvent> => {
   const user = userEvent.setup()
   render(<Game />)
-  await user.click(screen.getByRole('button', { name: 'Play' }))
+  await user.click(screen.getByRole('button', { name: /^(Play|Continue)$/ }))
   return user
 }
+
+// The game screen's buttons are the Home button (top right, alongside the
+// shell's lamps), the four guess options, and the Next/Start again advance
+// button. This isolates just the four options regardless of where Home sits
+// in DOM order, so tests don't have to know that ordering.
+const getGuessButtons = (): HTMLElement[] =>
+  screen
+    .getAllByRole('button')
+    .filter(
+      (b) =>
+        b.getAttribute('aria-label') !== 'Home' &&
+        b.textContent !== 'Next' &&
+        b.textContent !== 'Start again',
+    )
 
 describe('Game', () => {
   // Math.random is pinned to 0.5 for every call in this file (see
@@ -83,6 +99,30 @@ describe('Game', () => {
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
   })
 
+  it('returns to the menu on Home, preserving the run so the menu offers Continue', async () => {
+    const user = await renderGame()
+
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
+  })
+
+  it('offers Start again from the menu once a run is in progress, resetting the streak', async () => {
+    const user = await renderGame()
+
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    await user.click(screen.getByRole('button', { name: 'Start again' }))
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
+  })
+
   it('hides the options until the sprite has loaded', async () => {
     imageLoading.neverLoads = true
     await renderGame()
@@ -93,7 +133,8 @@ describe('Game', () => {
       expect(screen.queryByText(getPokemonName(id))).not.toBeInTheDocument()
     }
     // The grid's footprint is still reserved, so nothing shifts on load.
-    expect(screen.getAllByRole('button')).toHaveLength(5)
+    // Home + 4 guess slots + Next.
+    expect(screen.getAllByRole('button')).toHaveLength(6)
   })
 
   it('reveals the answer and scores a streak of 1 on a correct guess', async () => {
@@ -110,9 +151,7 @@ describe('Game', () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
-    const wrong = screen
-      .getAllByRole('button')
-      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
 
     expect(screen.getByRole('button', { name: 'Start again' })).toBeEnabled()
@@ -143,8 +182,8 @@ describe('Game', () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
-    const options = await screen.findAllByRole('button', { name: /.+/ })
-    const wrongOption = options.find((option) => option !== answerButton && option.textContent !== 'Next')
+    await screen.findAllByRole('button', { name: /.+/ })
+    const wrongOption = getGuessButtons().find((option) => option !== answerButton)
     if (!wrongOption) throw new Error('Expected at least one wrong option to be rendered')
     await user.click(wrongOption)
 
@@ -173,9 +212,7 @@ describe('Game', () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
-    const wrong = screen
-      .getAllByRole('button')
-      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
 
     expect(localStorage.getItem('streak')).toBe('0')
@@ -217,9 +254,7 @@ describe('Game', () => {
 
     const answerName = getPokemonName(pinnedAnswerId)
     const answerButton = screen.getByRole('button', { name: answerName })
-    const wrong = screen
-      .getAllByRole('button')
-      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
 
@@ -237,10 +272,9 @@ describe('Game', () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
-    // GuessGrid renders the four options before the advance button, so the
-    // first four buttons in DOM order are the options, in the same order as
-    // their on-screen number badges.
-    const answerIndex = screen.getAllByRole('button').slice(0, 4).indexOf(answerButton)
+    // GuessGrid's options render in the same order as their on-screen number
+    // badges.
+    const answerIndex = getGuessButtons().indexOf(answerButton)
 
     await user.keyboard(String(answerIndex + 1))
 
@@ -252,7 +286,7 @@ describe('Game', () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
-    const answerIndex = screen.getAllByRole('button').slice(0, 4).indexOf(answerButton)
+    const answerIndex = getGuessButtons().indexOf(answerButton)
 
     // e.g. Cmd+1 is a browser tab-switch shortcut and must not double as a guess.
     await user.keyboard(`{Meta>}${answerIndex + 1}{/Meta}`)
@@ -284,9 +318,7 @@ describe('Game', () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
-    const wrong = screen
-      .getAllByRole('button')
-      .find((b) => b !== answerButton && b.textContent !== 'Next' && b.textContent !== 'Start again')!
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
     expect(screen.getByRole('button', { name: 'Start again' })).toBeEnabled()
 
