@@ -19,9 +19,11 @@ const PokedexShell = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     const content = contentRef.current
     if (!content) return
-    const observer = new ResizeObserver(([entry]) => {
-      if (entry) setHeight(entry.contentRect.height)
-    })
+    // entry.contentRect excludes the observed element's own padding, which
+    // would undershoot the height by content's p-4/sm:p-5 and clip whatever
+    // sits nearest the bottom (the Next/Start again button). offsetHeight
+    // includes padding and border, matching the element's real rendered size.
+    const observer = new ResizeObserver(() => setHeight(content.offsetHeight))
     observer.observe(content)
     return () => observer.disconnect()
   }, [])
