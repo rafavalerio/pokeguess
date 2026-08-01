@@ -374,6 +374,7 @@ describe('Game', () => {
 
     // The recap replaces the round UI: no more guess options, just the
     // streak this run reached and its history.
+    expect(screen.getByText('All generations')).toBeInTheDocument()
     expect(screen.getByTestId('final-streak')).toHaveTextContent('2')
     expect(screen.getByText(getPokemonName(pinnedAnswerId))).toBeInTheDocument()
     expect(screen.getByText(getPokemonName(secondId))).toBeInTheDocument()
@@ -466,6 +467,20 @@ describe('Generation selection', () => {
     await user.click(screen.getByRole('button', { name: 'Play' }))
 
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })).toBeInTheDocument()
+  })
+
+  it('shows the picked generation on the run recap once the streak breaks', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+
+    const answerButton = await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
   })
 
   it('persists the picked generation even before a run starts', async () => {

@@ -159,17 +159,25 @@ than trusting the pre-hydration draw not to collide with a restored id.
 Once a wrong guess ends a run, `Game.tsx` renders `RunRecap` in place of both
 the silhouette/name/`GuessGrid` trio *and* `ScoreBoard` (hidden for this one
 screen — see below), instead of the single-round inline reveal those
-normally show. It's a read-only summary: the run's final streak alongside the
-all-time best (highlighted if this run just set a new one), every correctly
-guessed Pokémon this run (name + small sprite, oldest first), then the missed
-answer and what was guessed instead. `Game.tsx` computes this as one
-`missedGuess` value — `null` when it doesn't apply, otherwise
-`{ correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }` —
-rather than a separate boolean plus re-reading `state.guess` at the render
-site, so TypeScript narrows `state.guess` (`number | null`) to `number` once
-instead of needing a second null check (or a cast) in the JSX. `ScoreBoard` is
-skipped (`{!missedGuess && <ScoreBoard .../>}`) only in this state — it still
-shows normally mid-round and on the win screen.
+normally show. It's a read-only summary: which generation the run was played
+in, the run's final streak alongside the all-time best (highlighted if this
+run just set a new one), every correctly guessed Pokémon this run (name +
+small sprite, oldest first), then the missed answer and what was guessed
+instead. `Game.tsx` computes this as one `missedGuess` value — `null` when it
+doesn't apply, otherwise `{ generationLabel, correctEntries, bestStreak,
+isNewBest, missedAnswer, guessedAnswer }` — rather than a separate boolean
+plus re-reading `state.guess` at the render site, so TypeScript narrows
+`state.guess` (`number | null`) to `number` once instead of needing a second
+null check (or a cast) in the JSX. `ScoreBoard` is skipped
+(`{!missedGuess && <ScoreBoard .../>}`) only in this state — it still shows
+normally mid-round and on the win screen. `generationLabel` is resolved from
+`GENERATION_SELECT_OPTIONS` the same way `MainMenu`'s "current run" summary
+does, so the two never describe the pool differently.
+
+The streak box's two numbers sit in a `grid-cols-2` (not `flex` + `gap`), so
+"Final streak" and "Best" each get an equal half regardless of one label
+being longer than the other — a `flex` layout there sized each column to its
+content, which visibly off-centered the divider and the numbers under it.
 
 `correctEntries` is derived from `state.usedIds` minus `state.pokemonId`:
 `usedIds` already contains the id of the round just guessed wrong (added when

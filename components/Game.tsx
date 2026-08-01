@@ -223,6 +223,9 @@ const Game = () => {
   const missedGuess =
     revealed && state.guess !== null && state.guess !== state.pokemonId
       ? {
+          generationLabel:
+            GENERATION_SELECT_OPTIONS.find((option) => option.value === state.generation)?.label ??
+            'All generations',
           correctEntries: [...state.usedIds]
             .filter((id) => id !== state.pokemonId)
             .map((id) => ({ id, name: getPokemonName(id) })),

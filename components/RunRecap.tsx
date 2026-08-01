@@ -5,6 +5,10 @@ import { getSpriteUrl } from '@/lib/pokemon'
 export type RecapEntry = { id: number; name: string }
 
 type Props = {
+  // Which generation the run was played in ('All generations', 'Generation
+  // 3 · Hoenn', ...) — Game.tsx resolves this the same way MainMenu's
+  // "current run" summary does, from GENERATION_SELECT_OPTIONS.
+  generationLabel: string
   // Every Pokémon guessed correctly this run, oldest first.
   correctEntries: RecapEntry[]
   bestStreak: number | null
@@ -37,22 +41,27 @@ const RecapRow = ({ entry, wrong }: { entry: RecapEntry; wrong?: boolean }) => (
 // It carries both stat numbers ScoreBoard would otherwise show, since
 // Game.tsx hides ScoreBoard for this screen (its live "Streak" would already
 // read 0, which reads as a contradiction sitting right above this box).
-const RunRecap = ({ correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }: Props) => (
+const RunRecap = ({ generationLabel, correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }: Props) => (
   <div className="mb-3 flex flex-col gap-3 text-left">
     <div
       className={`rounded-2xl px-4 py-4 text-center ${
-        isNewBest ? 'bg-shell/10 border-shell border-2' : 'bg-screen-sunk border-2 border-transparent'
+        isNewBest ? 'bg-best/40 border-lamp-amber border-2' : 'bg-screen-sunk border-2 border-transparent'
       }`}
     >
-      {isNewBest && <p className="text-shell mb-2 text-xs font-semibold tracking-wide uppercase">New best!</p>}
-      <div className="flex items-center justify-center gap-8">
+      <p className="text-ink-soft text-xs font-medium">{generationLabel}</p>
+      {isNewBest && (
+        <p className="text-best-ink mt-1 text-xs font-semibold tracking-wide uppercase">New best!</p>
+      )}
+      {/* grid-cols-2 (rather than flex + gap) keeps both halves the same
+          width regardless of "Final streak" being longer than "Best", so the
+          divider — and each number under it — lands dead center. */}
+      <div className="divide-ink-soft/20 mt-2 grid grid-cols-2 divide-x">
         <div>
           <p className="text-ink-soft text-xs font-medium">Final streak</p>
           <p className="text-ink mt-1 text-3xl font-semibold tabular-nums" data-testid="final-streak">
             {correctEntries.length}
           </p>
         </div>
-        <div className="bg-ink-soft/20 h-10 w-px" aria-hidden="true" />
         <div>
           <p className="text-ink-soft text-xs font-medium">Best</p>
           <p className="text-ink mt-1 text-3xl font-semibold tabular-nums" data-testid="final-best">
