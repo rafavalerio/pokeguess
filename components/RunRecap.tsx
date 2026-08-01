@@ -25,10 +25,13 @@ const RecapRow = ({ entry, round, wrong }: { entry: RecapEntry; round: number; w
     {/* black/10 rather than a fixed color, so the badge reads as "a shade
         darker than this row's own background" whether the row is
         bg-screen-sunk (correct) or bg-wrong (missed), instead of needing a
-        separate hardcoded tone per row type. */}
+        separate hardcoded tone per row type. min-w-5 + px-1.5 (rather than a
+        fixed size-5) makes this a pill that grows for a 3-4 digit round
+        number — "all generations" runs can pass 1000 — instead of clipping
+        digits outside a fixed circle. */}
     <span
       data-testid="recap-round"
-      className={`flex size-5 shrink-0 items-center justify-center rounded-full bg-black/10 text-xs font-semibold tabular-nums ${
+      className={`flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-black/10 px-1.5 text-xs font-semibold tabular-nums ${
         wrong ? 'text-wrong-ink' : 'text-ink-soft'
       }`}
     >

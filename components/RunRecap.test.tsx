@@ -89,6 +89,14 @@ describe('RunRecap', () => {
     expect(rounds).toEqual(['1'])
   })
 
+  it('renders a 4-digit round number in full on a very long "all generations" run', () => {
+    const manyCorrectEntries = Array.from({ length: 999 }, (_, i) => ({ id: i + 1, name: `Pokemon ${i + 1}` }))
+    render(<RunRecap {...baseProps} correctEntries={manyCorrectEntries} />)
+
+    const rounds = screen.getAllByTestId('recap-round')
+    expect(rounds[rounds.length - 1]).toHaveTextContent('1000')
+  })
+
   it('omits the correct-guesses list entirely when the run ended on the first round', () => {
     render(<RunRecap {...baseProps} correctEntries={[]} />)
 

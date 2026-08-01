@@ -185,7 +185,10 @@ prefixed with a small round-number badge, 1-indexed, the missed row taking
 badge is `bg-black/10` rather than a fixed color, so it reads as "a shade
 darker than this row's own background" whether the row is `bg-screen-sunk`
 (correct) or `bg-wrong` (missed), instead of needing a separate hardcoded
-tone per row type.
+tone per row type. It's `min-w-5` + horizontal padding rather than a fixed
+`size-5`, so it stays a circle for 1-2 digit rounds but grows into a pill for
+3-4 digit ones — an "all generations" run can pass 1000, which would
+otherwise clip against a fixed-width circle.
 
 `correctEntries` is derived from `state.usedIds` minus `state.pokemonId`:
 `usedIds` already contains the id of the round just guessed wrong (added when
