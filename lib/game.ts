@@ -1,24 +1,34 @@
 import { DEX_PROXIMITY, SIMILARITY_THRESHOLD, hardDistractorCountForStreak } from './gameConfig'
+import { pokemonListForGeneration, type GenerationFilter } from './generations'
 import { getPokemonEntry } from './pokemon'
 import { pokemonList, type PokemonEntry } from './pokemonData'
 
 export type Rng = () => number
 
-export const randomPokemon = (rng: Rng): PokemonEntry =>
-  pokemonList[Math.floor(rng() * pokemonList.length)]
+// Every draw function below takes the candidate pool explicitly rather than
+// always reading pokemonList, so the same logic serves both "all Pokémon"
+// and a generation-filtered run. It defaults to the full pokemonList so
+// call sites (and existing tests) that don't care about generations don't
+// need to pass one.
+export const randomPokemon = (rng: Rng, pool: readonly PokemonEntry[] = pokemonList): PokemonEntry =>
+  pool[Math.floor(rng() * pool.length)]
 
-export const randomPokemonExcluding = (rng: Rng, excludeIds: ReadonlySet<number>): PokemonEntry => {
+export const randomPokemonExcluding = (
+  rng: Rng,
+  excludeIds: ReadonlySet<number>,
+  pool: readonly PokemonEntry[] = pokemonList,
+): PokemonEntry => {
   let guard = 0
-  let candidate = randomPokemon(rng)
+  let candidate = randomPokemon(rng, pool)
   while (excludeIds.has(candidate.id) && guard < 1000) {
-    candidate = randomPokemon(rng)
+    candidate = randomPokemon(rng, pool)
     guard += 1
   }
   if (!excludeIds.has(candidate.id)) return candidate
   // Guard tripped: an enormous run has nearly exhausted the pool (or a
   // pathological rng). Deterministically wrap to the first still-unused
   // entry so the run keeps going instead of stalling.
-  return pokemonList.find((entry) => !excludeIds.has(entry.id)) ?? candidate
+  return pool.find((entry) => !excludeIds.has(entry.id)) ?? candidate
 }
 
 const shuffle = <T,>(items: T[], rng: Rng): T[] => {
@@ -63,7 +73,12 @@ export const isHardDistractor = (answer: PokemonEntry, candidate: PokemonEntry):
   Math.abs(answer.speciesDex - candidate.speciesDex) <= DEX_PROXIMITY ||
   spellingSimilarity(answer.name, candidate.name) >= SIMILARITY_THRESHOLD
 
-export const generateOptions = (answerId: number, streak: number, rng: Rng): number[] => {
+export const generateOptions = (
+  answerId: number,
+  streak: number,
+  rng: Rng,
+  pool: readonly PokemonEntry[] = pokemonList,
+): number[] => {
   const answer = getPokemonEntry(answerId)
   const hardTarget = hardDistractorCountForStreak(streak)
   const options = new Set<number>([answerId])
@@ -73,7 +88,7 @@ export const generateOptions = (answerId: number, streak: number, rng: Rng): num
   // streaks.
   if (hardTarget > 0) {
     const hardCandidates = shuffle(
-      pokemonList.filter((entry) => entry.id !== answerId && isHardDistractor(answer, entry)),
+      pool.filter((entry) => entry.id !== answerId && isHardDistractor(answer, entry)),
       rng,
     )
     for (const candidate of hardCandidates) {
@@ -84,7 +99,7 @@ export const generateOptions = (answerId: number, streak: number, rng: Rng): num
 
   let guard = 0
   while (options.size < 4 && guard < 1000) {
-    options.add(randomPokemon(rng).id)
+    options.add(randomPokemon(rng, pool).id)
     guard += 1
   }
   // A degenerate rng (e.g. one that always returns the same value) can leave
@@ -92,9 +107,9 @@ export const generateOptions = (answerId: number, streak: number, rng: Rng): num
   // Deterministically fill any remaining slots so the result is always
   // exactly 4 unique ids.
   let index = 0
-  while (options.size < Math.min(4, pokemonList.length)) {
-    options.add(pokemonList[index].id)
-    index = index >= pokemonList.length - 1 ? 0 : index + 1
+  while (options.size < Math.min(4, pool.length)) {
+    options.add(pool[index].id)
+    index = index >= pool.length - 1 ? 0 : index + 1
   }
   return shuffle([...options], rng)
 }
@@ -119,6 +134,11 @@ export type GameState = {
   // whenever a run ends (see the NEXT case) so a fresh run can draw anything
   // again, including a Pokémon just shown in the run that just ended.
   usedIds: ReadonlySet<number>
+  // Which generation's Pokémon this run draws from ('all' = every entry).
+  // Scopes both the draw pool (randomPokemonExcluding/generateOptions) and
+  // the win condition (usedIds.size === pool.length), so a generation-scoped
+  // run can be "won" without covering the entire national dex.
+  generation: GenerationFilter
 }
 
 export type GameAction =
@@ -126,29 +146,37 @@ export type GameAction =
   | { type: 'GUESS'; pokemonId: number }
   | { type: 'NEXT'; rng: Rng }
   | { type: 'HYDRATE_BEST'; bestStreak: number }
-  | { type: 'HYDRATE_RUN'; rng: Rng; streak: number; usedIds: ReadonlySet<number> }
+  | { type: 'HYDRATE_RUN'; rng: Rng; streak: number; usedIds: ReadonlySet<number>; generation: GenerationFilter }
   | { type: 'RESTART'; rng: Rng }
+  // Starting a fresh run in a (possibly new) generation: always resets the
+  // streak, since switching pools mid-run would leave usedIds referring to
+  // entries that may not even be in the new pool. bestStreak is supplied by
+  // the caller (Game.tsx), which is the one that knows how to read the
+  // per-generation localStorage key — the reducer stays free of I/O.
+  | { type: 'SET_GENERATION'; rng: Rng; generation: GenerationFilter; bestStreak: number | null }
 
 const startRound = (
   rng: Rng,
   streak: number,
   usedIds: ReadonlySet<number>,
+  pool: readonly PokemonEntry[],
 ): Pick<GameState, 'status' | 'pokemonId' | 'options' | 'guess'> => {
-  const pokemonId = randomPokemonExcluding(rng, usedIds).id
-  return { status: 'loading', pokemonId, options: generateOptions(pokemonId, streak, rng), guess: null }
+  const pokemonId = randomPokemonExcluding(rng, usedIds, pool).id
+  return { status: 'loading', pokemonId, options: generateOptions(pokemonId, streak, rng, pool), guess: null }
 }
 
 export const createInitialState = (rng: Rng): GameState => {
-  const round = startRound(rng, 0, new Set())
-  return { ...round, streak: 0, bestStreak: null, roundId: 0, usedIds: new Set([round.pokemonId]) }
+  const round = startRound(rng, 0, new Set(), pokemonList)
+  return { ...round, streak: 0, bestStreak: null, roundId: 0, usedIds: new Set([round.pokemonId]), generation: 'all' }
 }
 
 // A full reset, same shape whether it's triggered by the win screen's "Start
 // again", a broken streak's next round, or abandoning an in-progress run from
-// the home screen.
-const restart = (state: GameState, rng: Rng): GameState => {
-  const round = startRound(rng, 0, new Set())
-  return { ...state, ...round, streak: 0, usedIds: new Set([round.pokemonId]), roundId: state.roundId + 1 }
+// the home screen. Keeps the current generation unless told otherwise.
+const restart = (state: GameState, rng: Rng, generation: GenerationFilter = state.generation): GameState => {
+  const pool = pokemonListForGeneration(generation)
+  const round = startRound(rng, 0, new Set(), pool)
+  return { ...state, ...round, streak: 0, usedIds: new Set([round.pokemonId]), roundId: state.roundId + 1, generation }
 }
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -171,12 +199,13 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
 
     case 'NEXT': {
       if (state.status === 'won') return restart(state, action.rng)
-      if (state.streak > 0 && state.usedIds.size === pokemonList.length) {
+      const pool = pokemonListForGeneration(state.generation)
+      if (state.streak > 0 && state.usedIds.size === pool.length) {
         // The round just revealed was the last unused entry in the pool.
         return { ...state, status: 'won' }
       }
       const usedIds = state.streak === 0 ? new Set<number>() : state.usedIds
-      const round = startRound(action.rng, state.streak, usedIds)
+      const round = startRound(action.rng, state.streak, usedIds, pool)
       return { ...state, ...round, usedIds: new Set(usedIds).add(round.pokemonId), roundId: state.roundId + 1 }
     }
 
@@ -188,19 +217,26 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
       // exclusion set (see createInitialState); nothing to restore for a run
       // that hadn't started yet.
       if (action.streak === 0) return state
-      if (action.usedIds.size === pokemonList.length) {
+      const pool = pokemonListForGeneration(action.generation)
+      if (action.usedIds.size === pool.length) {
         // The stored run had already exhausted the pool; land on the win
         // screen directly rather than drawing a round no distractor pool exists for.
-        return { ...state, streak: action.streak, usedIds: action.usedIds, status: 'won' }
+        return { ...state, streak: action.streak, usedIds: action.usedIds, status: 'won', generation: action.generation }
       }
-      const round = startRound(action.rng, action.streak, action.usedIds)
+      const round = startRound(action.rng, action.streak, action.usedIds, pool)
       return {
         ...state,
         ...round,
         streak: action.streak,
         usedIds: new Set(action.usedIds).add(round.pokemonId),
         roundId: state.roundId + 1,
+        generation: action.generation,
       }
+    }
+
+    case 'SET_GENERATION': {
+      const restarted = restart(state, action.rng, action.generation)
+      return { ...restarted, bestStreak: action.bestStreak }
     }
 
     case 'RESTART':

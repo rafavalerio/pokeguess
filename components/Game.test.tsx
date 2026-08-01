@@ -4,6 +4,7 @@ import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
+import { pokemonListForGeneration } from '@/lib/generations'
 import { getPokemonName } from '@/lib/pokemon'
 import { pokemonList } from '@/lib/pokemonData'
 
@@ -327,5 +328,112 @@ describe('Game', () => {
 
     await user.keyboard(' ')
     expect(screen.queryByRole('button', { name: 'Start again' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Generation selection', () => {
+  // Math.random is pinned to 0.5 for every test in this file (see
+  // beforeEach), so an unscoped ('all') run resolves to this id — see the
+  // outer describe block's identical pinnedAnswerId for the same reasoning.
+  const pinnedAnswerId = pokemonList[Math.floor(0.5 * pokemonList.length)].id
+  // A run scoped to generation 1 resolves to this entry the same way.
+  const gen1Pool = pokemonListForGeneration(1)
+  const pinnedGen1Id = gen1Pool[Math.floor(0.5 * gen1Pool.length)].id
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('defaults to "All generations" and offers every generation as an option', () => {
+    render(<Game />)
+
+    const select = screen.getByLabelText('Generation') as HTMLSelectElement
+    expect(select.value).toBe('all')
+    expect(screen.getByRole('option', { name: 'Generation 1 · Kanto' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Generation 9 · Paldea' })).toBeInTheDocument()
+  })
+
+  it('scopes a fresh run to the selected generation', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })).toBeInTheDocument()
+  })
+
+  it('persists the picked generation even before a run starts', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    unmount()
+
+    render(<Game />)
+    expect(await screen.findByLabelText('Generation')).toHaveValue('1')
+  })
+
+  it('tracks a separate best streak per generation, leaving the "all" key untouched', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedGen1Id) })) // correct, streak 1
+
+    expect(localStorage.getItem('bestStreak:gen1')).toBe('1')
+    expect(localStorage.getItem('bestStreak')).toBeNull()
+  })
+
+  it('shows a best-streak row for every generation plus All on the stats screen', async () => {
+    localStorage.setItem('bestStreak', '9')
+    localStorage.setItem('bestStreak:gen1', '3')
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Stats' }))
+
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+    expect(screen.getByText('9')).toBeInTheDocument()
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+    // A generation with no recorded run yet shows an em dash, not 0.
+    expect(screen.getByText('Generation 2 · Johto')).toBeInTheDocument()
+  })
+
+  it('locks the generation select once a run is in progress', async () => {
+    const user = await renderGame()
+
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.getByLabelText('Generation')).toBeDisabled()
+  })
+
+  it('re-enables the generation select once a run ends on a wrong guess', async () => {
+    const user = await renderGame()
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.getByLabelText('Generation')).toBeEnabled()
+  })
+
+  it('resumes a restored run against the generation it was played in', async () => {
+    localStorage.setItem('selectedGeneration', '1')
+    localStorage.setItem('streak', '4')
+    localStorage.setItem('usedIds', JSON.stringify([pinnedGen1Id]))
+    render(<Game />)
+
+    await screen.findByRole('button', { name: 'Continue' })
+    expect(screen.getByLabelText('Generation')).toHaveValue('1')
   })
 })

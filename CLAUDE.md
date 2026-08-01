@@ -7,8 +7,8 @@ Guidance for Claude Code when working in this repository.
 Pokéguess: a single-screen game that shows a Pokémon silhouette and four name
 options. Next 16 App Router, React 19, TypeScript 6, Tailwind v4, Vitest.
 There is no backend, no database and no API route — sprites come from a static
-GitHub repo, and the only persisted state is `bestStreak`, `streak` and
-`usedIds` in `localStorage`.
+GitHub repo, and the only persisted state is `bestStreak` (per generation),
+`streak`, `usedIds` and `selectedGeneration` in `localStorage`.
 
 ## Commands
 
@@ -42,13 +42,15 @@ and composes the presentational components (`GuessGrid`, `GuessButton`,
 components hold no game state of their own — if you find yourself adding
 `useState` to one of them, the state probably belongs in the reducer.
 
-Game.tsx also owns one piece of plain (non-reducer) state: `view` (`'menu' |
-'stats' | 'game'`), which screen is showing. It starts on `'menu'` — a main
-menu / hub, currently the title, a Play button and a Stats button (best
-streak only, for now) — and switches to `'game'` to show the existing
-single-round UI unchanged. `view` deliberately isn't part of `GameState`: it's
-screen routing, not round logic, and `'menu'` renders identically on server
-and client, so it carries none of the hydration risk `pokemonId`/`options` do.
+Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
+'game'`), which screen is showing, and `selectedGeneration` (see "Generation
+selection" below), the menu's generation picker. `view` starts on `'menu'` — a
+main menu / hub with the title, a Play button, a generation `<select>` and a
+Stats button — and switches to `'game'` to show the existing single-round UI
+unchanged. Both deliberately sit outside `GameState`: they're pre-game/screen
+state, not round logic, and both default identically on server and client
+(`'menu'`, `'all'`), so neither carries the hydration risk `pokemonId`/
+`options` do.
 
 The game screen has a Home button (top right, next to `PokedexShell`'s lamps)
 that sets `view` back to `'menu'` without touching the reducer, so an
@@ -119,6 +121,37 @@ already rendered, so it doesn't trip the hydration constraint above. Because
 the initial round was drawn with an empty exclusion set, `HYDRATE_RUN` redraws
 the round against the restored `usedIds` — same as a normal `NEXT` — rather
 than trusting the pre-hydration draw not to collide with a restored id.
+
+### Generation selection
+
+**`lib/generations.ts`** defines `GENERATIONS` (national dex ranges for gens
+1–9) and `pokemonListForGeneration(filter)`, where `filter` is `GameState`'s
+new `generation: GenerationFilter` field (`'all' | number`). Every draw
+function in `lib/game.ts` (`randomPokemon`, `randomPokemonExcluding`,
+`generateOptions`, `startRound`) takes the candidate pool as an explicit
+argument rather than reading `pokemonList` directly, defaulting to the full
+list so existing call sites and tests are unaffected. The win condition
+(`usedIds.size === pool.length`) is scoped to that same pool, so a
+generation-restricted run can be won without covering the whole national dex.
+
+The menu's generation `<select>` is plain component state in `Game.tsx`
+(`selectedGeneration`), the same "pre-game pick, not round logic" pattern as
+`view` — it's only committed into the reducer, via the `SET_GENERATION`
+action, when a fresh run actually starts (Play or Start again). `SET_GENERATION`
+redraws the round from the new pool, resets the streak, and adopts a
+caller-supplied `bestStreak`, since only `Game.tsx` knows how to read the
+right per-generation localStorage key; the reducer stays free of I/O. The
+select is disabled whenever a run is in progress (`streak > 0`) so a pool
+swap can't happen out from under an active run.
+
+Best streaks are tracked per generation: `'all'` keeps the original plain
+`bestStreak` key (so upgrading an existing save doesn't lose it), and every
+other generation gets its own `bestStreak:gen<N>` key. The stats screen reads
+all of them into `allBestStreaks` and renders one row per generation plus
+`'all'`, rather than the single number it showed before this existed. The
+active run's generation is restored from a single `selectedGeneration` key —
+`HYDRATE_RUN` also takes a `generation` argument, and it's this same key,
+since the select being locked during a run guarantees the two never diverge.
 
 ### Hiding the answer
 
