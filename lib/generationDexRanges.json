@@ -1,0 +1,11 @@
+[
+  { "id": 1, "minDex": 1, "maxDex": 151 },
+  { "id": 2, "minDex": 152, "maxDex": 251 },
+  { "id": 3, "minDex": 252, "maxDex": 386 },
+  { "id": 4, "minDex": 387, "maxDex": 493 },
+  { "id": 5, "minDex": 494, "maxDex": 649 },
+  { "id": 6, "minDex": 650, "maxDex": 721 },
+  { "id": 7, "minDex": 722, "maxDex": 809 },
+  { "id": 8, "minDex": 810, "maxDex": 905 },
+  { "id": 9, "minDex": 906, "maxDex": 1025 }
+]

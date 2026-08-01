@@ -4,7 +4,7 @@ import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
-import { pokemonListForGeneration } from '@/lib/generations'
+import { pokemonPoolFor } from '@/lib/generations'
 import { getPokemonName } from '@/lib/pokemon'
 import { pokemonList } from '@/lib/pokemonData'
 
@@ -58,10 +58,14 @@ const getGuessButtons = (): HTMLElement[] =>
 describe('Game', () => {
   // Math.random is pinned to 0.5 for every call in this file (see
   // beforeEach), and lib/game.ts's randomPokemon does
-  // `pokemonList[Math.floor(rng() * pokemonList.length)]` — mirror that here
-  // so this constant tracks lib/pokemonData.ts automatically instead of
-  // going stale the next time the data is regenerated.
-  const pinnedAnswerId = pokemonList[Math.floor(0.5 * pokemonList.length)].id
+  // `pool[Math.floor(rng() * pool.length)]` — mirror that here so this
+  // constant tracks lib/pokemonData.ts automatically instead of going stale
+  // the next time the data is regenerated. Every test below reaches the game
+  // screen via Play/Continue, which — with the default, unchecked "include
+  // variants" setting — draws from the base-species-only pool, not the raw
+  // pokemonList (see lib/generations.ts's pokemonPoolFor).
+  const defaultPool = pokemonPoolFor('all', false)
+  const pinnedAnswerId = defaultPool[Math.floor(0.5 * defaultPool.length)].id
 
   beforeEach(() => {
     localStorage.clear()
@@ -335,9 +339,14 @@ describe('Generation selection', () => {
   // Math.random is pinned to 0.5 for every test in this file (see
   // beforeEach), so an unscoped ('all') run resolves to this id — see the
   // outer describe block's identical pinnedAnswerId for the same reasoning.
-  const pinnedAnswerId = pokemonList[Math.floor(0.5 * pokemonList.length)].id
-  // A run scoped to generation 1 resolves to this entry the same way.
-  const gen1Pool = pokemonListForGeneration(1)
+  const pinnedAnswerId = pokemonPoolFor('all', false)[Math.floor(0.5 * pokemonPoolFor('all', false).length)].id
+  // A run scoped to generation 1, with the default (unchecked) "include
+  // variants" setting, resolves to this entry the same way. Generation 1 has
+  // no forms of its own regardless (no form kind maps to generation 1 — see
+  // scripts/build-pokemon-data.mjs's FORM_GENERATION_BY_KIND), so this
+  // happens to match pokemonPoolFor(1, true) too, but false is what Play
+  // actually uses by default.
+  const gen1Pool = pokemonPoolFor(1, false)
   const pinnedGen1Id = gen1Pool[Math.floor(0.5 * gen1Pool.length)].id
 
   beforeEach(() => {
@@ -435,5 +444,75 @@ describe('Generation selection', () => {
 
     await screen.findByRole('button', { name: 'Continue' })
     expect(screen.getByLabelText('Generation')).toHaveValue('1')
+  })
+})
+
+describe('Include variants', () => {
+  const pinnedExcludingVariants = pokemonPoolFor('all', false)[
+    Math.floor(0.5 * pokemonPoolFor('all', false).length)
+  ].id
+  const pinnedIncludingVariants = pokemonPoolFor('all', true)[
+    Math.floor(0.5 * pokemonPoolFor('all', true).length)
+  ].id
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('defaults to unchecked, drawing base species only', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    expect(screen.getByLabelText(/Include Mega Evolutions/)).not.toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedExcludingVariants) })).toBeInTheDocument()
+  })
+
+  it('when checked, includes Mega/regional/Gigantamax forms in the draw pool', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByLabelText(/Include Mega Evolutions/))
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedIncludingVariants) })).toBeInTheDocument()
+  })
+
+  it('persists the checkbox pick across a reload before any run starts', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Game />)
+
+    await user.click(screen.getByLabelText(/Include Mega Evolutions/))
+    unmount()
+
+    render(<Game />)
+    expect(await screen.findByLabelText(/Include Mega Evolutions/)).toBeChecked()
+    expect(localStorage.getItem('includeVariants')).toBe('true')
+  })
+
+  it('locks the checkbox once a run is in progress', async () => {
+    const user = await renderGame()
+
+    // renderGame's default Play uses the default (unchecked) pool.
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedExcludingVariants) })) // correct, streak 1
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.getByLabelText(/Include Mega Evolutions/)).toBeDisabled()
+  })
+
+  it('resumes a restored run honoring the includeVariants it was played with', async () => {
+    localStorage.setItem('includeVariants', 'true')
+    localStorage.setItem('streak', '4')
+    localStorage.setItem('usedIds', JSON.stringify([pinnedIncludingVariants]))
+    render(<Game />)
+
+    await screen.findByRole('button', { name: 'Continue' })
+    expect(screen.getByLabelText(/Include Mega Evolutions/)).toBeChecked()
   })
 })

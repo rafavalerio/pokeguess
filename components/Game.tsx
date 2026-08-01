@@ -16,6 +16,7 @@ const BEST_STREAK_KEY = 'bestStreak'
 const STREAK_KEY = 'streak'
 const USED_IDS_KEY = 'usedIds'
 const SELECTED_GENERATION_KEY = 'selectedGeneration'
+const INCLUDE_VARIANTS_KEY = 'includeVariants'
 const rng: Rng = () => Math.random()
 
 // 'all' keeps the pre-existing plain 'bestStreak' key so upgrading doesn't
@@ -87,6 +88,12 @@ const Game = () => {
   // below. Defaults to 'all' on both server and client, so it carries none of
   // the hydration risk state.pokemonId/state.options do.
   const [selectedGeneration, setSelectedGeneration] = useState<GenerationFilter>('all')
+  // Whether Mega/regional/Gigantamax forms are in the draw pool, alongside
+  // `selectedGeneration` — same "pre-game pick" pattern, same default-false
+  // on both server and client. Independent of the generation pick since a
+  // form's own generation (when it was introduced) can differ from its base
+  // species' — see lib/generations.ts's pokemonPoolFor.
+  const [includeVariants, setIncludeVariants] = useState(false)
   // Best streak per generation ('all' included), read from localStorage for
   // the stats screen. Keyed by String(GenerationFilter) since object keys are
   // always strings.
@@ -96,6 +103,8 @@ const Game = () => {
     try {
       const hydratedGeneration = parseGenerationFilter(localStorage.getItem(SELECTED_GENERATION_KEY))
       setSelectedGeneration(hydratedGeneration)
+      const hydratedIncludeVariants = localStorage.getItem(INCLUDE_VARIANTS_KEY) === 'true'
+      setIncludeVariants(hydratedIncludeVariants)
 
       const bestStreaks: Record<string, number> = {}
       for (const option of GENERATION_SELECT_OPTIONS) {
@@ -124,6 +133,7 @@ const Game = () => {
           streak: Math.floor(storedStreak),
           usedIds: new Set(storedUsedIds),
           generation: hydratedGeneration,
+          includeVariants: hydratedIncludeVariants,
         })
       }
     } catch {
@@ -167,9 +177,24 @@ const Game = () => {
     }
   }, [])
 
-  const startWithGeneration = useCallback(
-    (generation: GenerationFilter) => {
-      dispatch({ type: 'SET_GENERATION', rng, generation, bestStreak: allBestStreaks[String(generation)] ?? null })
+  const handleIncludeVariantsChange = useCallback((next: boolean) => {
+    setIncludeVariants(next)
+    try {
+      localStorage.setItem(INCLUDE_VARIANTS_KEY, String(next))
+    } catch {
+      // See the read effect above: persistence is best-effort.
+    }
+  }, [])
+
+  const startRun = useCallback(
+    (generation: GenerationFilter, includeVariantsPick: boolean) => {
+      dispatch({
+        type: 'SET_GENERATION',
+        rng,
+        generation,
+        includeVariants: includeVariantsPick,
+        bestStreak: allBestStreaks[String(generation)] ?? null,
+      })
       setView('game')
     },
     [allBestStreaks],
@@ -226,12 +251,14 @@ const Game = () => {
           generation={selectedGeneration}
           generationOptions={GENERATION_SELECT_OPTIONS}
           onGenerationChange={handleGenerationChange}
+          includeVariants={includeVariants}
+          onIncludeVariantsChange={handleIncludeVariantsChange}
           onPlay={() => {
             if (state.streak > 0) {
               setView('game')
               return
             }
-            startWithGeneration(selectedGeneration)
+            startRun(selectedGeneration, includeVariants)
           }}
           onStartAgain={() => {
             dispatch({ type: 'RESTART', rng })

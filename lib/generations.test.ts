@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest'
 import {
   GENERATIONS,
   GENERATION_SELECT_OPTIONS,
+  generationForDex,
   isValidGenerationFilter,
   parseGenerationFilter,
-  pokemonListForGeneration,
+  pokemonPoolFor,
 } from './generations'
 import { pokemonList } from './pokemonData'
 
@@ -16,45 +17,74 @@ describe('GENERATIONS', () => {
     for (let i = 1; i < sorted.length; i += 1) {
       expect(sorted[i].minDex).toBe(sorted[i - 1].maxDex + 1)
     }
-    expect(sorted[sorted.length - 1].maxDex).toBe(Math.max(...pokemonList.map((entry) => entry.speciesDex)))
+    expect(sorted[sorted.length - 1].maxDex).toBe(
+      Math.max(...pokemonList.filter((entry) => entry.id === entry.speciesDex).map((entry) => entry.speciesDex)),
+    )
   })
 })
 
-describe('pokemonListForGeneration', () => {
-  it("returns the full list for 'all'", () => {
-    expect(pokemonListForGeneration('all')).toBe(pokemonList)
-  })
-
-  it('only returns entries whose speciesDex falls in the generation range', () => {
-    const gen1 = GENERATIONS.find((g) => g.id === 1)!
-    const filtered = pokemonListForGeneration(1)
-    expect(filtered.length).toBeGreaterThan(0)
-    for (const entry of filtered) {
-      expect(entry.speciesDex).toBeGreaterThanOrEqual(gen1.minDex)
-      expect(entry.speciesDex).toBeLessThanOrEqual(gen1.maxDex)
+describe('every PokemonEntry.generation is a known generation id', () => {
+  it('never falls outside 1-9', () => {
+    for (const entry of pokemonList) {
+      expect(GENERATIONS.some((generation) => generation.id === entry.generation)).toBe(true)
     }
   })
+})
 
-  it('buckets a form (e.g. Mega Charizard) with the generation of its base species', () => {
-    const megaCharizardX = pokemonList.find((entry) => entry.name === 'Mega Charizard X')
-    expect(megaCharizardX).toBeDefined()
-    const gen1 = pokemonListForGeneration(1)
-    expect(gen1.some((entry) => entry.id === megaCharizardX!.id)).toBe(true)
+const findByName = (name: string) => pokemonList.find((entry) => entry.name === name)
+
+describe('form generation is the generation the form itself was introduced in, not its base species', () => {
+  // These are well-established, stable facts about when each form type was
+  // introduced (Mega Evolution: X/Y; Alolan: Sun/Moon; Galarian/Gigantamax:
+  // Sword/Shield; Hisuian: Legends Arceus; Paldean: Scarlet/Violet) — not
+  // derived from the base species' own generation.
+  it.each([
+    ['Bulbasaur', 1],
+    ['Mega Charizard X', 6],
+    ['Mega Charizard Y', 6],
+    ['Alolan Raichu', 7],
+    ['Galarian Zigzagoon', 8],
+    ['Gigantamax Charizard', 8],
+    ['Hisuian Zorua', 8],
+    ['Paldean Wooper', 9],
+  ])('%s -> generation %i', (name, expectedGeneration) => {
+    const entry = findByName(name)
+    expect(entry).toBeDefined()
+    expect(entry?.generation).toBe(expectedGeneration)
   })
 
-  it('together, every generation partitions pokemonList exactly (no entry missing or duplicated)', () => {
-    const seen = new Set<number>()
-    for (const generation of GENERATIONS) {
-      for (const entry of pokemonListForGeneration(generation.id)) {
-        expect(seen.has(entry.id)).toBe(false)
-        seen.add(entry.id)
-      }
-    }
-    expect(seen.size).toBe(pokemonList.length)
+  it("places Mega Charizard X in generation 6's pool, not generation 1's", () => {
+    const megaCharizardX = findByName('Mega Charizard X')!
+    expect(pokemonPoolFor(6, true).some((entry) => entry.id === megaCharizardX.id)).toBe(true)
+    expect(pokemonPoolFor(1, true).some((entry) => entry.id === megaCharizardX.id)).toBe(false)
+  })
+})
+
+describe('pokemonPoolFor', () => {
+  it("returns every entry for ('all', true)", () => {
+    expect(pokemonPoolFor('all', true)).toEqual(pokemonList)
   })
 
-  it('falls back to the full list for an unknown generation id', () => {
-    expect(pokemonListForGeneration(999)).toBe(pokemonList)
+  it('excludes every form when includeVariants is false, regardless of generation', () => {
+    const pool = pokemonPoolFor('all', false)
+    expect(pool.length).toBeGreaterThan(0)
+    expect(pool.every((entry) => entry.id === entry.speciesDex)).toBe(true)
+  })
+
+  it('only returns entries whose own generation matches, when a generation is picked', () => {
+    const pool = pokemonPoolFor(1, true)
+    expect(pool.length).toBeGreaterThan(0)
+    expect(pool.every((entry) => entry.generation === 1)).toBe(true)
+  })
+
+  it('combines both filters: base species from one generation only', () => {
+    const pool = pokemonPoolFor(1, false)
+    expect(pool.length).toBeGreaterThan(0)
+    expect(pool.every((entry) => entry.generation === 1 && entry.id === entry.speciesDex)).toBe(true)
+  })
+
+  it('returns an empty pool for an unknown generation id (guarded upstream by isValidGenerationFilter)', () => {
+    expect(pokemonPoolFor(999, true)).toEqual([])
   })
 })
 
@@ -83,6 +113,19 @@ describe('parseGenerationFilter', () => {
     expect(parseGenerationFilter(null)).toBe('all')
     expect(parseGenerationFilter('not-a-generation')).toBe('all')
     expect(parseGenerationFilter('999')).toBe('all')
+  })
+})
+
+describe('generationForDex', () => {
+  it('maps a dex number to the generation whose range covers it', () => {
+    expect(generationForDex(1)).toBe(1)
+    expect(generationForDex(151)).toBe(1)
+    expect(generationForDex(152)).toBe(2)
+    expect(generationForDex(1025)).toBe(9)
+  })
+
+  it('falls back to the last generation for a dex past every known range', () => {
+    expect(generationForDex(999999)).toBe(GENERATIONS[GENERATIONS.length - 1].id)
   })
 })
 

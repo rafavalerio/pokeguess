@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { pokemonListForGeneration } from './generations'
+import { pokemonPoolFor } from './generations'
 import { pokemonList } from './pokemonData'
 import {
   createInitialState,
@@ -249,8 +249,21 @@ describe('no-repeat within a run', () => {
   })
 
   it('resets the exclusion set once the streak breaks', () => {
-    const pinnedId = idAt(0.5)
-    let state = createInitialState(makeRng([0.5]))
+    // SET_GENERATION (includeVariants: true) puts the run on the full
+    // pokemonList pool, matching idAt's assumption; createInitialState's own
+    // pre-mount round is drawn against the full list too but that's a
+    // hydration-safety exception, not what a real run uses by default (see
+    // the includeVariants describe block below) — so this test starts a run
+    // explicitly rather than relying on the raw createInitialState draw.
+    let state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    state = gameReducer(state, {
+      type: 'SET_GENERATION',
+      rng: makeRng([0.5]),
+      generation: 'all',
+      includeVariants: true,
+      bestStreak: null,
+    })
+    const pinnedId = state.pokemonId
     state = gameReducer(state, { type: 'IMAGE_READY' })
     const wrong = state.options.find((o) => o !== state.pokemonId)!
     state = gameReducer(state, { type: 'GUESS', pokemonId: wrong }) // wrong, streak 0
@@ -273,6 +286,7 @@ describe('HYDRATE_RUN', () => {
       streak: 0,
       usedIds: new Set(),
       generation: 'all',
+      includeVariants: false,
     })
     expect(hydrated).toBe(state)
   })
@@ -288,6 +302,7 @@ describe('HYDRATE_RUN', () => {
       streak: 4,
       usedIds,
       generation: 'all',
+      includeVariants: false,
     })
 
     expect(hydrated.streak).toBe(4)
@@ -309,6 +324,7 @@ describe('HYDRATE_RUN', () => {
       streak: pokemonList.length,
       usedIds,
       generation: 'all',
+      includeVariants: true,
     })
 
     expect(hydrated.status).toBe('won')
@@ -318,8 +334,19 @@ describe('HYDRATE_RUN', () => {
 
 describe('RESTART', () => {
   it('abandons an in-progress run: streak and usedIds reset, a fresh round is drawn', () => {
-    const pinnedId = idAt(0.5)
-    let state = createInitialState(makeRng([0.5]))
+    // See the identical comment in the 'no-repeat within a run' describe
+    // block above: SET_GENERATION puts the run on a known (full-list) pool
+    // so idAt's assumption holds, rather than relying on createInitialState's
+    // hydration-only pre-mount draw.
+    let state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    state = gameReducer(state, {
+      type: 'SET_GENERATION',
+      rng: makeRng([0.5]),
+      generation: 'all',
+      includeVariants: true,
+      bestStreak: null,
+    })
+    const pinnedId = state.pokemonId
     state = gameReducer(state, { type: 'IMAGE_READY' })
     state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, streak 1
     expect(state.streak).toBe(1)
@@ -363,6 +390,7 @@ describe('winning the game', () => {
       roundId: 5,
       usedIds: allUsedIds(),
       generation: 'all',
+      includeVariants: true,
     }
 
     const revealed = gameReducer(state, { type: 'GUESS', pokemonId: lastId })
@@ -383,6 +411,7 @@ describe('winning the game', () => {
       roundId: 5,
       usedIds: allUsedIds(),
       generation: 'all',
+      includeVariants: true,
     }
 
     const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
@@ -403,6 +432,7 @@ describe('winning the game', () => {
       roundId: 5,
       usedIds: allUsedIds(),
       generation: 'all',
+      includeVariants: true,
     }
 
     const restarted = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
@@ -416,7 +446,7 @@ describe('winning the game', () => {
 })
 
 describe('generation-scoped pools', () => {
-  const gen1Pool = pokemonListForGeneration(1)
+  const gen1Pool = pokemonPoolFor(1, true)
   const gen1Ids = new Set(gen1Pool.map((entry) => entry.id))
 
   it('randomPokemon only draws from the given pool', () => {
@@ -443,6 +473,7 @@ describe('generation-scoped pools', () => {
         type: 'SET_GENERATION',
         rng: makeRng([0.1]),
         generation: 1,
+        includeVariants: true,
         bestStreak: 42,
       })
 
@@ -460,6 +491,7 @@ describe('generation-scoped pools', () => {
         type: 'SET_GENERATION',
         rng: makeRng([0.1]),
         generation: 3,
+        includeVariants: true,
         bestStreak: null,
       })
       expect(switched.bestStreak).toBeNull()
@@ -480,6 +512,7 @@ describe('generation-scoped pools', () => {
         roundId: 5,
         usedIds: gen1Ids,
         generation: 1,
+        includeVariants: true,
       }
 
       const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
@@ -496,10 +529,71 @@ describe('generation-scoped pools', () => {
         streak: gen1Pool.length,
         usedIds: gen1Ids,
         generation: 1,
+        includeVariants: true,
       })
 
       expect(hydrated.status).toBe('won')
       expect(hydrated.generation).toBe(1)
     })
+  })
+})
+
+describe('includeVariants', () => {
+  it('defaults to false for a freshly created state', () => {
+    expect(createInitialState(makeRng([0.1, 0.2, 0.3, 0.4])).includeVariants).toBe(false)
+  })
+
+  it('SET_GENERATION with includeVariants false only ever draws base species', () => {
+    const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+
+    for (let seed = 0; seed < 20; seed += 1) {
+      const excluded = gameReducer(state, {
+        type: 'SET_GENERATION',
+        rng: makeRng([seed / 20]),
+        generation: 'all',
+        includeVariants: false,
+        bestStreak: null,
+      })
+      expect(excluded.includeVariants).toBe(false)
+      const entry = pokemonList.find((e) => e.id === excluded.pokemonId)!
+      expect(entry.id).toBe(entry.speciesDex)
+    }
+  })
+
+  it('RESTART keeps the current includeVariants setting', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, {
+      type: 'SET_GENERATION',
+      rng: makeRng([0.1]),
+      generation: 'all',
+      includeVariants: true,
+      bestStreak: null,
+    })
+
+    const restarted = gameReducer(state, { type: 'RESTART', rng: makeRng([0.5]) })
+    expect(restarted.includeVariants).toBe(true)
+  })
+
+  it('the win condition pool shrinks to base species only when includeVariants is false', () => {
+    const baseSpeciesOnly = pokemonPoolFor('all', false)
+    const everything = pokemonPoolFor('all', true)
+    expect(baseSpeciesOnly.length).toBeLessThan(everything.length)
+
+    const lastId = baseSpeciesOnly[0].id
+    const state: GameState = {
+      status: 'revealed',
+      pokemonId: lastId,
+      options: [lastId, baseSpeciesOnly[1].id, baseSpeciesOnly[2].id, baseSpeciesOnly[3].id],
+      guess: lastId,
+      streak: baseSpeciesOnly.length,
+      bestStreak: baseSpeciesOnly.length,
+      roundId: 5,
+      usedIds: new Set(baseSpeciesOnly.map((entry) => entry.id)),
+      generation: 'all',
+      includeVariants: false,
+    }
+
+    const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+    expect(won.status).toBe('won')
   })
 })

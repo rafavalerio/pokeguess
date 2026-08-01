@@ -30,6 +30,13 @@ type Props = {
   generation: GenerationFilter
   generationOptions: readonly GenerationOption[]
   onGenerationChange: (generation: GenerationFilter) => void
+  // Whether Mega Evolutions, regional forms and Gigantamax forms are in the
+  // draw pool at all. Independent of `generation`: a form is scoped to
+  // whichever generation introduced that specific form (e.g. Mega Charizard X
+  // is Generation 6), not its base species', so this needs its own control
+  // rather than being implied by the generation pick.
+  includeVariants: boolean
+  onIncludeVariantsChange: (includeVariants: boolean) => void
   onPlay: () => void
   onStartAgain: () => void
   onShowStats: () => void
@@ -43,6 +50,8 @@ const MainMenu = ({
   generation,
   generationOptions,
   onGenerationChange,
+  includeVariants,
+  onIncludeVariantsChange,
   onPlay,
   onStartAgain,
   onShowStats,
@@ -79,6 +88,17 @@ const MainMenu = ({
           {canContinue && (
             <p className="text-ink-soft mt-1 text-xs">Finish or start again to change generation.</p>
           )}
+          <label htmlFor="includeVariants" className="text-ink mt-3 flex items-center gap-2 text-xs font-medium">
+            <input
+              id="includeVariants"
+              type="checkbox"
+              checked={includeVariants}
+              disabled={canContinue}
+              onChange={(event) => onIncludeVariantsChange(event.target.checked)}
+              className="accent-shell border-screen-sunk focus-visible:ring-shell size-4 rounded border-2 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:opacity-60"
+            />
+            Include Mega Evolutions, regional & Gigantamax forms
+          </label>
         </div>
 
         <div className="flex w-full flex-col gap-2">

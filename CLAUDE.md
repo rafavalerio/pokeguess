@@ -8,7 +8,8 @@ Pokéguess: a single-screen game that shows a Pokémon silhouette and four name
 options. Next 16 App Router, React 19, TypeScript 6, Tailwind v4, Vitest.
 There is no backend, no database and no API route — sprites come from a static
 GitHub repo, and the only persisted state is `bestStreak` (per generation),
-`streak`, `usedIds` and `selectedGeneration` in `localStorage`.
+`streak`, `usedIds`, `selectedGeneration` and `includeVariants` in
+`localStorage`.
 
 ## Commands
 
@@ -66,11 +67,20 @@ and Start again, which dispatches `RESTART` (a full reset, the same shape
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
 in-scope alternate forms — Mega Evolutions, regional forms (Alolan/Galarian/
 Hisuian/Paldean), and Gigantamax forms — each as a `PokemonEntry { id, name,
-speciesDex }`. `id` doubles as the sprite filename; `speciesDex` is the
-national dex number a form shares with its base species. `lib/pokemon.ts` is
-the hand-maintained lookup layer over it (`getPokemonEntry`, `getPokemonName`,
-`getSpeciesDex`), keyed by `id` rather than array index since ids are no
-longer contiguous once forms are included.
+speciesDex, generation }`. `id` doubles as the sprite filename; `speciesDex`
+is the national dex number a form shares with its base species, used for the
+"same family" hard-distractor grouping. `generation` is the generation *that
+entry* was introduced in, which for a form is frequently later than its base
+species' — Mega Charizard X is `generation: 6` despite Charizard being
+`generation: 1` — computed via `FORM_GENERATION_BY_KIND` in the generator
+script rather than derived from `speciesDex` (see "Generation selection"
+below). `lib/pokemon.ts` is the hand-maintained lookup layer over it
+(`getPokemonEntry`, `getPokemonName`, `getSpeciesDex`), keyed by `id` rather
+than array index since ids are no longer contiguous once forms are included.
+`lib/generationDexRanges.json` is the shared source of truth for base-species
+generation boundaries — read directly by the (plain, non-TypeScript) build
+script and imported by `lib/generations.ts`, which layers display labels on
+top.
 
 **`lib/gameConfig.ts`** holds the tunable difficulty numbers — `DIFFICULTY_CURVE`
 (how many "hard" distractors appear per streak band), `DEX_PROXIMITY` and
@@ -124,34 +134,47 @@ than trusting the pre-hydration draw not to collide with a restored id.
 
 ### Generation selection
 
-**`lib/generations.ts`** defines `GENERATIONS` (national dex ranges for gens
-1–9) and `pokemonListForGeneration(filter)`, where `filter` is `GameState`'s
-new `generation: GenerationFilter` field (`'all' | number`). Every draw
-function in `lib/game.ts` (`randomPokemon`, `randomPokemonExcluding`,
-`generateOptions`, `startRound`) takes the candidate pool as an explicit
-argument rather than reading `pokemonList` directly, defaulting to the full
-list so existing call sites and tests are unaffected. The win condition
-(`usedIds.size === pool.length`) is scoped to that same pool, so a
-generation-restricted run can be won without covering the whole national dex.
+**`lib/generations.ts`** defines `GENERATIONS` (national dex ranges, for
+display labels and `generationForDex`'s defensive fallback only — see below)
+and `pokemonPoolFor(filter, includeVariants)`, where `filter` is `GameState`'s
+`generation: GenerationFilter` field (`'all' | number`) and `includeVariants`
+is its `includeVariants: boolean` field. A form is filtered by *its own*
+`generation` (see the `lib/pokemonData.ts` paragraph above), not its base
+species' — a Generation 1-scoped run never includes Mega Charizard X, since
+that entry's `generation` is 6. `includeVariants: false` additionally
+restricts the pool to base species (`entry.id === entry.speciesDex`); a form
+is only ever in scope when the toggle is on, regardless of which generation
+is selected. Every draw function in `lib/game.ts` (`randomPokemon`,
+`randomPokemonExcluding`, `generateOptions`, `startRound`) takes the candidate
+pool as an explicit argument rather than reading `pokemonList` directly,
+defaulting to the full list so existing call sites and tests are unaffected.
+The win condition (`usedIds.size === pool.length`) is scoped to that same
+pool, so a generation-restricted (and/or base-species-only) run can be won
+without covering the whole national dex.
 
-The menu's generation `<select>` is plain component state in `Game.tsx`
-(`selectedGeneration`), the same "pre-game pick, not round logic" pattern as
-`view` — it's only committed into the reducer, via the `SET_GENERATION`
-action, when a fresh run actually starts (Play or Start again). `SET_GENERATION`
-redraws the round from the new pool, resets the streak, and adopts a
-caller-supplied `bestStreak`, since only `Game.tsx` knows how to read the
-right per-generation localStorage key; the reducer stays free of I/O. The
-select is disabled whenever a run is in progress (`streak > 0`) so a pool
-swap can't happen out from under an active run.
+The menu's generation `<select>` and "include variants" checkbox are both
+plain component state in `Game.tsx` (`selectedGeneration`, `includeVariants`),
+the same "pre-game pick, not round logic" pattern as `view` — they're only
+committed into the reducer, via the `SET_GENERATION` action, when a fresh run
+actually starts (Play or Start again). `SET_GENERATION` redraws the round
+from the new pool, resets the streak, and adopts a caller-supplied
+`bestStreak`, since only `Game.tsx` knows how to read the right
+per-generation localStorage key; the reducer stays free of I/O. Both controls
+are disabled whenever a run is in progress (`streak > 0`) so a pool swap
+can't happen out from under an active run. `includeVariants` defaults to
+`false` (unchecked): a fresh player's pool starts as base species only.
 
-Best streaks are tracked per generation: `'all'` keeps the original plain
-`bestStreak` key (so upgrading an existing save doesn't lose it), and every
-other generation gets its own `bestStreak:gen<N>` key. The stats screen reads
-all of them into `allBestStreaks` and renders one row per generation plus
-`'all'`, rather than the single number it showed before this existed. The
-active run's generation is restored from a single `selectedGeneration` key —
-`HYDRATE_RUN` also takes a `generation` argument, and it's this same key,
-since the select being locked during a run guarantees the two never diverge.
+Best streaks are tracked per generation (not per `includeVariants` — that
+toggle only affects which pool a run draws from, not which stats bucket it
+counts against): `'all'` keeps the original plain `bestStreak` key (so
+upgrading an existing save doesn't lose it), and every other generation gets
+its own `bestStreak:gen<N>` key. The stats screen reads all of them into
+`allBestStreaks` and renders one row per generation plus `'all'`, rather than
+the single number it showed before this existed. The active run's generation
+and `includeVariants` are restored from the `selectedGeneration` and
+`includeVariants` keys — `HYDRATE_RUN` takes both as arguments, and they're
+these same keys, since both controls being locked during a run guarantees
+they never diverge from the active run's actual settings.
 
 ### Hiding the answer
 

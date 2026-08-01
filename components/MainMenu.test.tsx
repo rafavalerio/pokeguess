@@ -23,6 +23,8 @@ const baseProps = {
   generation: "all" as GenerationFilter,
   generationOptions,
   onGenerationChange: vi.fn<(generation: GenerationFilter) => void>(),
+  includeVariants: false,
+  onIncludeVariantsChange: vi.fn<(includeVariants: boolean) => void>(),
   onPlay: vi.fn<() => void>(),
   onStartAgain: vi.fn<() => void>(),
   onShowStats: vi.fn<() => void>(),
@@ -141,6 +143,35 @@ describe("MainMenu", () => {
     render(<MainMenu {...baseProps} canContinue={false} />);
 
     expect(screen.getByLabelText("Generation")).toBeEnabled();
+  });
+
+  it("shows the include-variants checkbox reflecting the current value", () => {
+    render(<MainMenu {...baseProps} includeVariants={true} />);
+
+    expect(
+      screen.getByLabelText(/Include Mega Evolutions/),
+    ).toBeChecked();
+  });
+
+  it("calls onIncludeVariantsChange when the checkbox is toggled", async () => {
+    const user = userEvent.setup();
+    const onIncludeVariantsChange = vi.fn<(includeVariants: boolean) => void>();
+    render(
+      <MainMenu
+        {...baseProps}
+        includeVariants={false}
+        onIncludeVariantsChange={onIncludeVariantsChange}
+      />,
+    );
+
+    await user.click(screen.getByLabelText(/Include Mega Evolutions/));
+    expect(onIncludeVariantsChange).toHaveBeenCalledWith(true);
+  });
+
+  it("disables the include-variants checkbox while a run is in progress", () => {
+    render(<MainMenu {...baseProps} canContinue={true} />);
+
+    expect(screen.getByLabelText(/Include Mega Evolutions/)).toBeDisabled();
   });
 
   it("shows a best-streak row per generation in stats mode, and a Back action", () => {
