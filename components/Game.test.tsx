@@ -342,6 +342,56 @@ describe('Game', () => {
     await user.keyboard(' ')
     expect(screen.queryByRole('button', { name: 'Start again' })).not.toBeInTheDocument()
   })
+
+  it('shows a run recap with every correctly guessed Pokémon plus the miss, once the streak breaks', async () => {
+    const user = await renderGame()
+
+    // Round 1: correct.
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Round 2: rng stays pinned to 0.5, so with pinnedAnswerId now excluded,
+    // the draw falls through to randomPokemonExcluding's deterministic
+    // fallback — the first pokemonList entry that isn't excluded yet.
+    const secondId = pokemonList.find((entry) => entry.id !== pinnedAnswerId)!.id
+    const secondAnswerButton = await screen.findByRole('button', { name: getPokemonName(secondId) })
+    await user.click(secondAnswerButton)
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Round 3: guess wrong on purpose.
+    const thirdId = pokemonList.find((entry) => entry.id !== pinnedAnswerId && entry.id !== secondId)!.id
+    const thirdAnswerButton = await screen.findByRole('button', { name: getPokemonName(thirdId) })
+    const wrong = getGuessButtons().find((b) => b !== thirdAnswerButton)!
+    await user.click(wrong)
+
+    // The recap replaces the round UI: no more guess options, just the
+    // streak this run reached and its history.
+    expect(screen.getByTestId('final-streak')).toHaveTextContent('2')
+    expect(screen.getByText(getPokemonName(pinnedAnswerId))).toBeInTheDocument()
+    expect(screen.getByText(getPokemonName(secondId))).toBeInTheDocument()
+    expect(screen.getByText('You missed')).toBeInTheDocument()
+    expect(screen.getByText(getPokemonName(thirdId))).toBeInTheDocument()
+    expect(screen.getByText('You guessed')).toBeInTheDocument()
+
+    // The persistent advance button still reads "Start again" and still
+    // resets the run from here — the recap doesn't need its own button.
+    await user.click(screen.getByRole('button', { name: 'Start again' }))
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedAnswerId) })).toBeInTheDocument()
+    expect(screen.queryByTestId('final-streak')).not.toBeInTheDocument()
+  })
+
+  it("omits the correct-guesses list when the run ends on the very first round", async () => {
+    const user = await renderGame()
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+
+    expect(screen.getByTestId('final-streak')).toHaveTextContent('0')
+    expect(screen.getByText('You missed')).toBeInTheDocument()
+    expect(screen.getByText(getPokemonName(pinnedAnswerId))).toBeInTheDocument()
+  })
 })
 
 describe('Generation selection', () => {

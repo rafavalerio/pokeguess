@@ -39,9 +39,10 @@ a seeded or scripted `rng`. Keep it that way; do not import `Math.random` into
 
 **`components/Game.tsx` is the only stateful component.** It owns the reducer
 and composes the presentational components (`GuessGrid`, `GuessButton`,
-`PokemonSilhouette`, `ScoreBoard`, `PokedexShell`, `MainMenu`) around it. Those
-components hold no game state of their own — if you find yourself adding
-`useState` to one of them, the state probably belongs in the reducer.
+`PokemonSilhouette`, `RunRecap`, `ScoreBoard`, `PokedexShell`, `MainMenu`)
+around it. Those components hold no game state of their own — if you find
+yourself adding `useState` to one of them, the state probably belongs in the
+reducer.
 
 Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
 'game'`), which screen is showing, and `selectedGeneration`/`includeVariants`
@@ -82,8 +83,12 @@ species' — Mega Charizard X is `generation: 6` despite Charizard being
 `generation: 1` — computed via `FORM_GENERATION_BY_KIND` in the generator
 script rather than derived from `speciesDex` (see "Generation selection"
 below). `lib/pokemon.ts` is the hand-maintained lookup layer over it
-(`getPokemonEntry`, `getPokemonName`, `getSpeciesDex`), keyed by `id` rather
-than array index since ids are no longer contiguous once forms are included.
+(`getPokemonEntry`, `getPokemonName`, `getSpeciesDex`, `getSpriteUrl`), keyed
+by `id` rather than array index since ids are no longer contiguous once forms
+are included. `getSpriteUrl` is the one piece shared with `PokemonSilhouette`
+and `RunRecap` — both render a sprite for a given id, just at different sizes
+and reveal states, so the URL pattern lives here rather than being
+duplicated.
 `lib/generationDexRanges.json` is the shared source of truth for base-species
 generation boundaries — read directly by the (plain, non-TypeScript) build
 script and imported by `lib/generations.ts`, which layers display labels on
@@ -138,6 +143,37 @@ already rendered, so it doesn't trip the hydration constraint above. Because
 the initial round was drawn with an empty exclusion set, `HYDRATE_RUN` redraws
 the round against the restored `usedIds` — same as a normal `NEXT` — rather
 than trusting the pre-hydration draw not to collide with a restored id.
+
+### The run recap screen
+
+Once a wrong guess ends a run, `Game.tsx` renders `RunRecap` in place of the
+silhouette/name/`GuessGrid` trio, instead of the single-round inline reveal
+those normally show. It's a read-only summary: every correctly guessed
+Pokémon this run (name + small sprite, oldest first), then the missed answer
+and what was guessed instead. `Game.tsx` computes this as one `missedGuess`
+value — `null` when it doesn't apply, otherwise `{ correctEntries,
+missedAnswer, guessedAnswer }` — rather than a separate boolean plus
+re-reading `state.guess` at the render site, so TypeScript narrows
+`state.guess` (`number | null`) to `number` once instead of needing a second
+null check (or a cast) in the JSX.
+
+`correctEntries` is derived from `state.usedIds` minus `state.pokemonId`:
+`usedIds` already contains the id of the round just guessed wrong (added when
+that round was drawn, before it was guessed), so excluding it leaves exactly
+the ids guessed correctly so far this run, in draw order. This is also why
+the recap's own "Final streak" number — `correctEntries.length` — is used
+instead of `state.streak`: `GUESS` zeroes `state.streak` immediately on a
+wrong guess (before `NEXT` is even dispatched), so by the time the recap
+renders, `state.streak` (and the `ScoreBoard` above it) already read `0`. The
+recap's number stays accurate about the run that just ended; `ScoreBoard`
+stays accurate about the (now-zero) live streak — the two intentionally
+disagree, hence the recap's number is labeled "Final streak" rather than
+reusing `ScoreBoard`'s "Streak" label.
+
+`RunRecap` has no button of its own. The persistent advance button at the
+bottom of the game screen already reads "Start again" and dispatches `NEXT`
+in this state (which behaves like `RESTART` once `streak` is already `0` —
+see the `NEXT` case in `lib/game.ts`), so the recap doesn't duplicate it.
 
 ### Generation selection
 

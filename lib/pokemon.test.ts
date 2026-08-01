@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getPokemonEntry, getPokemonName, getSpeciesDex } from './pokemon'
+import { getPokemonEntry, getPokemonName, getSpeciesDex, getSpriteUrl } from './pokemon'
 
 describe('getPokemonEntry', () => {
   it('resolves a base species by id', () => {
@@ -31,5 +31,13 @@ describe('getPokemonName', () => {
 describe('getSpeciesDex', () => {
   it('returns the entry species dex', () => {
     expect(getSpeciesDex(10033)).toBe(3)
+  })
+})
+
+describe('getSpriteUrl', () => {
+  it("builds the sprite URL from the entry's own id, not its species dex", () => {
+    expect(getSpriteUrl(10033)).toBe(
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/10033.png',
+    )
   })
 })

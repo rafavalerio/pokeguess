@@ -7,6 +7,7 @@ import GuessGrid from './GuessGrid'
 import MainMenu, { type StatsRow } from './MainMenu'
 import PokedexShell from './PokedexShell'
 import PokemonSilhouette from './PokemonSilhouette'
+import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
 import { GENERATION_SELECT_OPTIONS, parseGenerationFilter, type GenerationFilter } from '@/lib/generations'
@@ -211,6 +212,24 @@ const Game = () => {
   const won = mounted && state.status === 'won'
   const canAdvance = revealed || won
 
+  // Drives the run-recap screen (see RunRecap) in place of the normal round
+  // UI once a wrong guess ends the run. Computed as one value, rather than a
+  // separate boolean plus re-reading state.guess at the render site, so
+  // TypeScript narrows state.guess (number | null) to number here instead of
+  // needing a second null check (or a cast) in the JSX below — revealed with
+  // a set guess only ever follows a real GUESS action, so guess is never
+  // actually null at this point.
+  const missedGuess =
+    revealed && state.guess !== null && state.guess !== state.pokemonId
+      ? {
+          correctEntries: [...state.usedIds]
+            .filter((id) => id !== state.pokemonId)
+            .map((id) => ({ id, name: getPokemonName(id) })),
+          missedAnswer: { id: state.pokemonId, name: getPokemonName(state.pokemonId) },
+          guessedAnswer: { id: state.guess, name: getPokemonName(state.guess) },
+        }
+      : null
+
   // Digits 1-4 mirror clicking an option (matching the on-screen number
   // badges), Space or N mirrors the Next/Start again button. Modifier keys
   // are left alone so this doesn't fight browser shortcuts like Cmd+1 for
@@ -282,6 +301,8 @@ const Game = () => {
 
       {won ? (
         <WinScreen streak={state.streak} />
+      ) : missedGuess ? (
+        <RunRecap {...missedGuess} />
       ) : (
         <>
           <div className="mb-3">
@@ -334,7 +355,7 @@ const Game = () => {
             _
           </span>
         )}
-        {won || (revealed && state.guess !== state.pokemonId) ? 'Start again' : 'Next'}
+        {won || missedGuess ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )

@@ -4,10 +4,7 @@ import Image from 'next/image'
 import { useEffect, useRef } from 'react'
 
 import type { Status } from '@/lib/game'
-import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
-
-const SPRITE_BASE =
-  'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork'
+import { getPokemonName, getSpeciesDex, getSpriteUrl } from '@/lib/pokemon'
 
 type Props = {
   pokemonId: number
@@ -60,7 +57,7 @@ const PokemonSilhouette = ({ pokemonId, roundId, status, onReady }: Props) => {
       <Image
         ref={ref}
         key={roundId}
-        src={`${SPRITE_BASE}/${pokemonId}.png`}
+        src={getSpriteUrl(pokemonId)}
         alt={
           revealed
             ? `${getPokemonName(pokemonId)}, number ${getSpeciesDex(pokemonId)}`
