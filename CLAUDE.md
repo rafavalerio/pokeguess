@@ -44,24 +44,31 @@ components hold no game state of their own — if you find yourself adding
 `useState` to one of them, the state probably belongs in the reducer.
 
 Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
-'game'`), which screen is showing, and `selectedGeneration` (see "Generation
-selection" below), the menu's generation picker. `view` starts on `'menu'` — a
-main menu / hub with the title, a Play button, a generation `<select>` and a
-Stats button — and switches to `'game'` to show the existing single-round UI
-unchanged. Both deliberately sit outside `GameState`: they're pre-game/screen
-state, not round logic, and both default identically on server and client
-(`'menu'`, `'all'`), so neither carries the hydration risk `pokemonId`/
-`options` do.
+'game'`), which screen is showing, and `selectedGeneration`/`includeVariants`
+(see "Generation selection" below), the menu's pool pickers. `view` starts on
+`'menu'` — a main menu / hub with the title, a Play button, and a Stats
+button — and switches to `'game'` to show the existing single-round UI
+unchanged. All three deliberately sit outside `GameState`: they're
+pre-game/screen state, not round logic, and all default identically on server
+and client (`'menu'`, `'all'`, `false`), so none carries the hydration risk
+`pokemonId`/`options` do. The title only renders on `MainMenu` (`view !==
+'game'`); the game screen's header is just the "Who's that Pokémon?" line,
+sized up a step since it's no longer sitting under a heading.
 
 The game screen has a Home button (top right, next to `PokedexShell`'s lamps)
 that sets `view` back to `'menu'` without touching the reducer, so an
 in-progress run keeps its `pokemonId`/`options`/`status` in memory — the same
 round is still there if the player returns via Continue. Once a run is in
-progress (`streak > 0`), the menu swaps its single Play button for Continue
-(same handler as Play — the reducer already holds the right state either way)
-and Start again, which dispatches `RESTART` (a full reset, the same shape
-`NEXT` produces from the win screen or a broken streak) before switching to
-`'game'`.
+progress (`streak > 0`), the menu swaps its generation `<select>`/checkbox for
+a "current run" summary (generation, includeVariants, streak — all read
+straight off `GameState`/component state, not re-derived) and its single Play
+button for Continue (same handler as Play — the reducer already holds the
+right state either way) and Start again. Unlike Continue, Start again
+dispatches `RESTART` (a full reset, the same shape `NEXT` produces from the
+win screen or a broken streak) but deliberately does *not* switch `view` to
+`'game'` — it resets the streak and stays on the menu, so `canContinue` goes
+back to `false` and the picker reappears immediately for a fresh pick, rather
+than forcing a detour through the game screen and back via Home.
 
 **`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
@@ -155,13 +162,14 @@ without covering the whole national dex.
 The menu's generation `<select>` and "include variants" checkbox are both
 plain component state in `Game.tsx` (`selectedGeneration`, `includeVariants`),
 the same "pre-game pick, not round logic" pattern as `view` — they're only
-committed into the reducer, via the `SET_GENERATION` action, when a fresh run
-actually starts (Play or Start again). `SET_GENERATION` redraws the round
+committed into the reducer, via the `SET_GENERATION` action, when Play starts
+a genuinely fresh run (`streak === 0`). `SET_GENERATION` redraws the round
 from the new pool, resets the streak, and adopts a caller-supplied
 `bestStreak`, since only `Game.tsx` knows how to read the right
 per-generation localStorage key; the reducer stays free of I/O. Both controls
-are disabled whenever a run is in progress (`streak > 0`) so a pool swap
-can't happen out from under an active run. `includeVariants` defaults to
+are replaced by a "current run" summary (see above) whenever a run is in
+progress (`streak > 0`), rather than merely disabled, since there's nothing
+to pick until that run ends or is reset. `includeVariants` defaults to
 `false` (unchecked): a fresh player's pool starts as base species only.
 
 Best streaks are tracked per generation (not per `includeVariants` — that
@@ -173,8 +181,9 @@ its own `bestStreak:gen<N>` key. The stats screen reads all of them into
 the single number it showed before this existed. The active run's generation
 and `includeVariants` are restored from the `selectedGeneration` and
 `includeVariants` keys — `HYDRATE_RUN` takes both as arguments, and they're
-these same keys, since both controls being locked during a run guarantees
-they never diverge from the active run's actual settings.
+these same keys, since neither control is editable during a run (they're
+replaced by the summary instead), guaranteeing they never diverge from the
+active run's actual settings.
 
 ### Hiding the answer
 

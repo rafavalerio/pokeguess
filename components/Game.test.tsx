@@ -118,13 +118,22 @@ describe('Game', () => {
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
   })
 
-  it('offers Start again from the menu once a run is in progress, resetting the streak', async () => {
+  it('resets the run without leaving the menu when Start again is clicked, so a new pick is offered right away', async () => {
     const user = await renderGame()
 
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
     await user.click(screen.getByRole('button', { name: 'Home' }))
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Start again' }))
+
+    // Still on the menu — the streak is gone and the generation picker is
+    // back, rather than dropping straight into a fresh round.
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Generation')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Play' }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
   })
 
@@ -416,16 +425,18 @@ describe('Generation selection', () => {
     expect(screen.getByText('Generation 2 · Johto')).toBeInTheDocument()
   })
 
-  it('locks the generation select once a run is in progress', async () => {
+  it('replaces the generation select with a current-run summary once a run is in progress', async () => {
     const user = await renderGame()
 
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
     await user.click(screen.getByRole('button', { name: 'Home' }))
 
-    expect(screen.getByLabelText('Generation')).toBeDisabled()
+    expect(screen.queryByLabelText('Generation')).not.toBeInTheDocument()
+    expect(screen.getByText('Current run')).toBeInTheDocument()
+    expect(screen.getByText('All generations')).toBeInTheDocument()
   })
 
-  it('re-enables the generation select once a run ends on a wrong guess', async () => {
+  it('shows the generation select again once a run ends on a wrong guess', async () => {
     const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
@@ -443,7 +454,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await screen.findByRole('button', { name: 'Continue' })
-    expect(screen.getByLabelText('Generation')).toHaveValue('1')
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
   })
 })
 
@@ -496,14 +507,14 @@ describe('Include variants', () => {
     expect(localStorage.getItem('includeVariants')).toBe('true')
   })
 
-  it('locks the checkbox once a run is in progress', async () => {
+  it('hides the checkbox behind a current-run summary once a run is in progress', async () => {
     const user = await renderGame()
 
     // renderGame's default Play uses the default (unchecked) pool.
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedExcludingVariants) })) // correct, streak 1
     await user.click(screen.getByRole('button', { name: 'Home' }))
 
-    expect(screen.getByLabelText(/Include Mega Evolutions/)).toBeDisabled()
+    expect(screen.queryByLabelText(/Include Mega Evolutions/)).not.toBeInTheDocument()
   })
 
   it('resumes a restored run honoring the includeVariants it was played with', async () => {
@@ -513,6 +524,6 @@ describe('Include variants', () => {
     render(<Game />)
 
     await screen.findByRole('button', { name: 'Continue' })
-    expect(screen.getByLabelText(/Include Mega Evolutions/)).toBeChecked()
+    expect(screen.getByText(/Includes Mega, regional & Gigantamax forms/)).toBeInTheDocument()
   })
 })

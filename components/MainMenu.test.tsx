@@ -20,6 +20,7 @@ const baseProps = {
   mode: "menu" as const,
   statsRows,
   canContinue: false,
+  streak: 0,
   generation: "all" as GenerationFilter,
   generationOptions,
   onGenerationChange: vi.fn<(generation: GenerationFilter) => void>(),
@@ -133,16 +134,38 @@ describe("MainMenu", () => {
     expect(onGenerationChange).toHaveBeenCalledWith("all");
   });
 
-  it("disables the generation select while a run is in progress", () => {
+  it("hides the generation select and checkbox while a run is in progress", () => {
     render(<MainMenu {...baseProps} canContinue={true} />);
 
-    expect(screen.getByLabelText("Generation")).toBeDisabled();
+    expect(screen.queryByLabelText("Generation")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText(/Include Mega Evolutions/),
+    ).not.toBeInTheDocument();
   });
 
-  it("leaves the generation select enabled when no run is in progress", () => {
+  it("shows the generation select when no run is in progress", () => {
     render(<MainMenu {...baseProps} canContinue={false} />);
 
     expect(screen.getByLabelText("Generation")).toBeEnabled();
+  });
+
+  it("shows a current-run summary (generation, streak) instead of the picker while a run is in progress", () => {
+    render(
+      <MainMenu
+        {...baseProps}
+        canContinue={true}
+        streak={4}
+        generation={1}
+        includeVariants={true}
+      />,
+    );
+
+    expect(screen.getByText("Current run")).toBeInTheDocument();
+    expect(screen.getByText("Generation 1 · Kanto")).toBeInTheDocument();
+    expect(screen.getByText("4")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Includes Mega, regional & Gigantamax forms/),
+    ).toBeInTheDocument();
   });
 
   it("shows the include-variants checkbox reflecting the current value", () => {
@@ -166,12 +189,6 @@ describe("MainMenu", () => {
 
     await user.click(screen.getByLabelText(/Include Mega Evolutions/));
     expect(onIncludeVariantsChange).toHaveBeenCalledWith(true);
-  });
-
-  it("disables the include-variants checkbox while a run is in progress", () => {
-    render(<MainMenu {...baseProps} canContinue={true} />);
-
-    expect(screen.getByLabelText(/Include Mega Evolutions/)).toBeDisabled();
   });
 
   it("shows a best-streak row per generation in stats mode, and a Back action", () => {

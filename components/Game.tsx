@@ -248,6 +248,7 @@ const Game = () => {
           mode={view}
           statsRows={statsRows}
           canContinue={state.streak > 0}
+          streak={state.streak}
           generation={selectedGeneration}
           generationOptions={GENERATION_SELECT_OPTIONS}
           onGenerationChange={handleGenerationChange}
@@ -260,10 +261,7 @@ const Game = () => {
             }
             startRun(selectedGeneration, includeVariants)
           }}
-          onStartAgain={() => {
-            dispatch({ type: 'RESTART', rng })
-            setView('game')
-          }}
+          onStartAgain={() => dispatch({ type: 'RESTART', rng })}
           onShowStats={() => setView('stats')}
           onBack={() => setView('menu')}
         />
@@ -273,13 +271,10 @@ const Game = () => {
 
   return (
     <PokedexShell onHome={() => setView('menu')}>
-      {/*
-        Onest's geometric letterforms carry a lot of sidebearing at display
-        sizes, so the title takes negative tracking to keep it feeling like one
-        word rather than spaced-out capitals.
-      */}
-      <h1 className="text-ink mb-1 text-center text-xl font-bold tracking-tight">Pokéguess</h1>
-      <p className="text-ink-soft mb-3 text-center text-xs">Who&apos;s that Pokémon?</p>
+      {/* The title only appears on the main menu; in-round, this line is the
+          only heading text, so it carries a bit more size than the subtitle
+          it used to be. */}
+      <p className="text-ink mb-3 text-center text-sm font-semibold">Who&apos;s that Pokémon?</p>
 
       <div className="mb-4">
         <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
