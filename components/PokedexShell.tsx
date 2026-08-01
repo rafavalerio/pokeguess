@@ -49,9 +49,9 @@ const PokedexShell = ({ children, onHome }: Props) => {
             type="button"
             onClick={onHome}
             aria-label="Home"
-            className="text-button/80 enabled:hover:text-button enabled:hover:bg-shell-dark focus-visible:ring-screen flex size-7 items-center justify-center rounded-full transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-95"
+            className="text-button/90 border-button/40 enabled:hover:text-button enabled:hover:border-button/70 enabled:hover:bg-shell-dark focus-visible:ring-screen flex size-9 items-center justify-center rounded-full border-2 transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-95"
           >
-            <Home className="size-4" aria-hidden="true" />
+            <Home className="size-5" aria-hidden="true" />
           </button>
         )}
       </div>
