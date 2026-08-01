@@ -2,6 +2,35 @@ import { writeFileSync, readFileSync } from 'node:fs'
 
 const SPECIES_NAMES = JSON.parse(readFileSync(new URL('./species-names.json', import.meta.url)))
 
+// Single source of truth for base-species generation boundaries, shared with
+// lib/generations.ts (which adds display labels this plain script has no use
+// for). Kept as JSON since this script runs as plain Node ESM and can't
+// import lib/generations.ts's TypeScript directly.
+const GENERATION_DEX_RANGES = JSON.parse(
+  readFileSync(new URL('../lib/generationDexRanges.json', import.meta.url)),
+)
+
+const dexToGeneration = (dex) => {
+  const range = GENERATION_DEX_RANGES.find((r) => dex >= r.minDex && dex <= r.maxDex)
+  if (!range) throw new Error(`no generation range covers dex ${dex}`)
+  return range.id
+}
+
+// A form is frequently introduced generations after its base species (Mega
+// Charizard X is Generation 6, even though Charizard is Generation 1), so
+// each `kind` carries its own generation rather than inheriting the base
+// species'. 'paldea' and 'paldea-breed' are handled separately below since
+// they don't go through the SUFFIXES/kind machinery.
+const FORM_GENERATION_BY_KIND = {
+  mega: 6,
+  'mega-x': 6,
+  'mega-y': 6,
+  gmax: 8,
+  alola: 7,
+  galar: 8,
+  hisui: 8,
+}
+
 // Markers that mean "this is a battle-only or cosmetic variant riding on an
 // in-scope suffix, not the regional form / mega / gigantamax itself" — e.g.
 // raticate-totem-alola, darmanitan-galar-zen, pikachu-alola-cap. Matched
@@ -100,7 +129,7 @@ const speciesDisplayName = (dex) => {
 
 const entries = []
 for (const [, dex] of speciesDexByName) {
-  entries.push({ id: dex, name: speciesDisplayName(dex), speciesDex: dex })
+  entries.push({ id: dex, name: speciesDisplayName(dex), speciesDex: dex, generation: dexToGeneration(dex) })
 }
 
 const dropped = []
@@ -118,6 +147,7 @@ for (const p of pokemonResults) {
         id: idFromUrl(p.url),
         name: displayName(speciesDisplayName(dex), 'paldea-breed', flavor),
         speciesDex: dex,
+        generation: 9,
       })
     } else {
       dropped.push(raw)
@@ -129,7 +159,12 @@ for (const p of pokemonResults) {
     const base = normalized.slice(0, -'-paldea'.length)
     const dex = speciesDexByName.get(base)
     if (dex) {
-      entries.push({ id: idFromUrl(p.url), name: displayName(speciesDisplayName(dex), 'paldea'), speciesDex: dex })
+      entries.push({
+        id: idFromUrl(p.url),
+        name: displayName(speciesDisplayName(dex), 'paldea'),
+        speciesDex: dex,
+        generation: 9,
+      })
     } else {
       dropped.push(raw)
     }
@@ -140,10 +175,11 @@ for (const p of pokemonResults) {
   if (!suffixMatch) continue
   const [suffix, kind] = suffixMatch
   const stripped = normalized.slice(0, -suffix.length)
+  const generation = FORM_GENERATION_BY_KIND[kind]
 
   if (speciesDexByName.has(stripped)) {
     const dex = speciesDexByName.get(stripped)
-    entries.push({ id: idFromUrl(p.url), name: displayName(speciesDisplayName(dex), kind), speciesDex: dex })
+    entries.push({ id: idFromUrl(p.url), name: displayName(speciesDisplayName(dex), kind), speciesDex: dex, generation })
     continue
   }
 
@@ -163,6 +199,7 @@ for (const p of pokemonResults) {
     id: idFromUrl(p.url),
     name,
     speciesDex: dex,
+    generation,
   })
 }
 
@@ -178,7 +215,7 @@ const banner = `// GENERATED FILE — do not hand-edit.
 `
 const body =
   banner +
-  '\nexport type PokemonEntry = {\n  id: number\n  name: string\n  speciesDex: number\n}\n\n' +
+  '\nexport type PokemonEntry = {\n  id: number\n  name: string\n  speciesDex: number\n  generation: number\n}\n\n' +
   'export const pokemonList: readonly PokemonEntry[] = ' +
   JSON.stringify(entries, null, 2) +
   '\n'

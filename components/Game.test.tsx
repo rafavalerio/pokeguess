@@ -4,6 +4,7 @@ import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
+import { pokemonPoolFor } from '@/lib/generations'
 import { getPokemonName } from '@/lib/pokemon'
 import { pokemonList } from '@/lib/pokemonData'
 
@@ -57,10 +58,14 @@ const getGuessButtons = (): HTMLElement[] =>
 describe('Game', () => {
   // Math.random is pinned to 0.5 for every call in this file (see
   // beforeEach), and lib/game.ts's randomPokemon does
-  // `pokemonList[Math.floor(rng() * pokemonList.length)]` — mirror that here
-  // so this constant tracks lib/pokemonData.ts automatically instead of
-  // going stale the next time the data is regenerated.
-  const pinnedAnswerId = pokemonList[Math.floor(0.5 * pokemonList.length)].id
+  // `pool[Math.floor(rng() * pool.length)]` — mirror that here so this
+  // constant tracks lib/pokemonData.ts automatically instead of going stale
+  // the next time the data is regenerated. Every test below reaches the game
+  // screen via Play/Continue, which — with the default, unchecked "include
+  // variants" setting — draws from the base-species-only pool, not the raw
+  // pokemonList (see lib/generations.ts's pokemonPoolFor).
+  const defaultPool = pokemonPoolFor('all', false)
+  const pinnedAnswerId = defaultPool[Math.floor(0.5 * defaultPool.length)].id
 
   beforeEach(() => {
     localStorage.clear()
@@ -87,6 +92,14 @@ describe('Game', () => {
     expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
   })
 
+  it('shows a "Who\'s that Pokémon?" heading with the active generation as its subtitle on the game screen', async () => {
+    await renderGame()
+
+    const heading = screen.getByRole('heading', { name: "Who's that Pokémon?" })
+    expect(heading.tagName).toBe('H2')
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+  })
+
   it('shows the best streak on the stats screen and returns to the menu on Back', async () => {
     localStorage.setItem('bestStreak', '9')
     const user = userEvent.setup()
@@ -95,8 +108,14 @@ describe('Game', () => {
     await user.click(screen.getByRole('button', { name: 'Stats' }))
     expect(await screen.findByText('9')).toBeInTheDocument()
 
+    // The stats screen swaps the title for a "Stats" heading and moves Back
+    // into the shell's corner (same slot the game screen's Home button uses).
+    expect(screen.getByRole('heading', { name: 'Stats' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Pokéguess' })).not.toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
   })
 
   it('returns to the menu on Home, preserving the run so the menu offers Continue', async () => {
@@ -113,13 +132,22 @@ describe('Game', () => {
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
   })
 
-  it('offers Start again from the menu once a run is in progress, resetting the streak', async () => {
+  it('resets the run without leaving the menu when Start again is clicked, so a new pick is offered right away', async () => {
     const user = await renderGame()
 
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
     await user.click(screen.getByRole('button', { name: 'Home' }))
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Start again' }))
+
+    // Still on the menu — the streak is gone and the generation picker is
+    // back, rather than dropping straight into a fresh round.
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Generation')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Play' }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
   })
 
@@ -187,8 +215,10 @@ describe('Game', () => {
     if (!wrongOption) throw new Error('Expected at least one wrong option to be rendered')
     await user.click(wrongOption)
 
-    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
-    expect(screen.getByTestId('stat-best')).toHaveTextContent('7')
+    // ScoreBoard is hidden on the run-recap screen (see Game.tsx); the recap
+    // itself shows the same "best" number instead.
+    expect(screen.queryByTestId('stat-best')).not.toBeInTheDocument()
+    expect(screen.getByTestId('final-best')).toHaveTextContent('7')
     expect(localStorage.getItem('bestStreak')).toBe('7')
   })
 
@@ -256,7 +286,6 @@ describe('Game', () => {
     const answerButton = screen.getByRole('button', { name: answerName })
     const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
-    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
 
     await user.click(screen.getByRole('button', { name: 'Start again' }))
 
@@ -327,5 +356,285 @@ describe('Game', () => {
 
     await user.keyboard(' ')
     expect(screen.queryByRole('button', { name: 'Start again' })).not.toBeInTheDocument()
+  })
+
+  it('shows a run recap with every correctly guessed Pokémon plus the miss, once the streak breaks', async () => {
+    const user = await renderGame()
+
+    // Round 1: correct.
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Round 2: rng stays pinned to 0.5, so with pinnedAnswerId now excluded,
+    // the draw falls through to randomPokemonExcluding's deterministic
+    // fallback — the first pokemonList entry that isn't excluded yet.
+    const secondId = pokemonList.find((entry) => entry.id !== pinnedAnswerId)!.id
+    const secondAnswerButton = await screen.findByRole('button', { name: getPokemonName(secondId) })
+    await user.click(secondAnswerButton)
+    expect(screen.getByTestId('stat-streak')).toHaveTextContent('2')
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    // Round 3: guess wrong on purpose.
+    const thirdId = pokemonList.find((entry) => entry.id !== pinnedAnswerId && entry.id !== secondId)!.id
+    const thirdAnswerButton = await screen.findByRole('button', { name: getPokemonName(thirdId) })
+    const wrong = getGuessButtons().find((b) => b !== thirdAnswerButton)!
+    await user.click(wrong)
+
+    // The recap replaces the round UI: no more guess options, just the
+    // streak this run reached and its history.
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+    expect(screen.getByTestId('final-streak')).toHaveTextContent('2')
+    expect(screen.getByText(getPokemonName(pinnedAnswerId))).toBeInTheDocument()
+    expect(screen.getByText(getPokemonName(secondId))).toBeInTheDocument()
+    expect(screen.getByText('You missed')).toBeInTheDocument()
+    expect(screen.getByText(getPokemonName(thirdId))).toBeInTheDocument()
+    expect(screen.getByText('You guessed')).toBeInTheDocument()
+
+    // Each row is numbered by round, 1 onwards, with the miss as round 3.
+    expect(screen.getAllByTestId('recap-round').map((el) => el.textContent)).toEqual(['1', '2', '3'])
+
+    // This is the first run ever played, so reaching a streak of 2 is a
+    // genuinely new best, not just a tie.
+    expect(screen.getByTestId('final-best')).toHaveTextContent('2')
+    expect(screen.getByText('New best!')).toBeInTheDocument()
+
+    // ScoreBoard is hidden while the recap is showing — the recap carries
+    // both numbers itself.
+    expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
+
+    // The persistent advance button still reads "Start again" and still
+    // resets the run from here — the recap doesn't need its own button.
+    await user.click(screen.getByRole('button', { name: 'Start again' }))
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedAnswerId) })).toBeInTheDocument()
+    expect(screen.queryByTestId('final-streak')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stat-streak')).toBeInTheDocument()
+  })
+
+  it("omits the correct-guesses list when the run ends on the very first round", async () => {
+    const user = await renderGame()
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+
+    expect(screen.getByTestId('final-streak')).toHaveTextContent('0')
+    expect(screen.getByText('You missed')).toBeInTheDocument()
+    expect(screen.getByText(getPokemonName(pinnedAnswerId))).toBeInTheDocument()
+  })
+
+  it('does not highlight a run that only tied the existing best streak', async () => {
+    localStorage.setItem('bestStreak', '1')
+    const user = await renderGame()
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+
+    // The very first guess of the run was wrong, so the run's streak is 0 —
+    // nowhere near the stored best of 1 — definitely not a new one.
+    expect(screen.getByTestId('final-streak')).toHaveTextContent('0')
+    expect(screen.getByTestId('final-best')).toHaveTextContent('1')
+    expect(screen.queryByText('New best!')).not.toBeInTheDocument()
+  })
+})
+
+describe('Generation selection', () => {
+  // Math.random is pinned to 0.5 for every test in this file (see
+  // beforeEach), so an unscoped ('all') run resolves to this id — see the
+  // outer describe block's identical pinnedAnswerId for the same reasoning.
+  const pinnedAnswerId = pokemonPoolFor('all', false)[Math.floor(0.5 * pokemonPoolFor('all', false).length)].id
+  // A run scoped to generation 1, with the default (unchecked) "include
+  // variants" setting, resolves to this entry the same way. Generation 1 has
+  // no forms of its own regardless (no form kind maps to generation 1 — see
+  // scripts/build-pokemon-data.mjs's FORM_GENERATION_BY_KIND), so this
+  // happens to match pokemonPoolFor(1, true) too, but false is what Play
+  // actually uses by default.
+  const gen1Pool = pokemonPoolFor(1, false)
+  const pinnedGen1Id = gen1Pool[Math.floor(0.5 * gen1Pool.length)].id
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('defaults to "All generations" and offers every generation as an option', () => {
+    render(<Game />)
+
+    const select = screen.getByLabelText('Generation') as HTMLSelectElement
+    expect(select.value).toBe('all')
+    expect(screen.getByRole('option', { name: 'Generation 1 · Kanto' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Generation 9 · Paldea' })).toBeInTheDocument()
+  })
+
+  it('scopes a fresh run to the selected generation', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })).toBeInTheDocument()
+  })
+
+  it('shows the picked generation as the game screen\'s subtitle throughout the run, including the recap', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+
+    const answerButton = await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
+
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+
+    // Still there once the run ends and the recap replaces the round UI.
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
+  })
+
+  it('persists the picked generation even before a run starts', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    unmount()
+
+    render(<Game />)
+    expect(await screen.findByLabelText('Generation')).toHaveValue('1')
+  })
+
+  it('tracks a separate best streak per generation, leaving the "all" key untouched', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedGen1Id) })) // correct, streak 1
+
+    expect(localStorage.getItem('bestStreak:gen1')).toBe('1')
+    expect(localStorage.getItem('bestStreak')).toBeNull()
+  })
+
+  it('shows a best-streak row for every generation plus All on the stats screen', async () => {
+    localStorage.setItem('bestStreak', '9')
+    localStorage.setItem('bestStreak:gen1', '3')
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Stats' }))
+
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+    expect(screen.getByText('9')).toBeInTheDocument()
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+    // A generation with no recorded run yet shows an em dash, not 0.
+    expect(screen.getByText('Generation 2 · Johto')).toBeInTheDocument()
+  })
+
+  it('replaces the generation select with a current-run summary once a run is in progress', async () => {
+    const user = await renderGame()
+
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })) // correct, streak 1
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.queryByLabelText('Generation')).not.toBeInTheDocument()
+    expect(screen.getByText('Current run')).toBeInTheDocument()
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+  })
+
+  it('shows the generation select again once a run ends on a wrong guess', async () => {
+    const user = await renderGame()
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.getByLabelText('Generation')).toBeEnabled()
+  })
+
+  it('resumes a restored run against the generation it was played in', async () => {
+    localStorage.setItem('selectedGeneration', '1')
+    localStorage.setItem('streak', '4')
+    localStorage.setItem('usedIds', JSON.stringify([pinnedGen1Id]))
+    render(<Game />)
+
+    await screen.findByRole('button', { name: 'Continue' })
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
+  })
+})
+
+describe('Include variants', () => {
+  const pinnedExcludingVariants = pokemonPoolFor('all', false)[
+    Math.floor(0.5 * pokemonPoolFor('all', false).length)
+  ].id
+  const pinnedIncludingVariants = pokemonPoolFor('all', true)[
+    Math.floor(0.5 * pokemonPoolFor('all', true).length)
+  ].id
+
+  beforeEach(() => {
+    localStorage.clear()
+    vi.spyOn(Math, 'random').mockReturnValue(0.5)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('defaults to unchecked, drawing base species only', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    expect(screen.getByLabelText(/Include Mega Evolutions/)).not.toBeChecked()
+
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedExcludingVariants) })).toBeInTheDocument()
+  })
+
+  it('when checked, includes Mega/regional/Gigantamax forms in the draw pool', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByLabelText(/Include Mega Evolutions/))
+    await user.click(screen.getByRole('button', { name: 'Play' }))
+
+    expect(await screen.findByRole('button', { name: getPokemonName(pinnedIncludingVariants) })).toBeInTheDocument()
+  })
+
+  it('persists the checkbox pick across a reload before any run starts', async () => {
+    const user = userEvent.setup()
+    const { unmount } = render(<Game />)
+
+    await user.click(screen.getByLabelText(/Include Mega Evolutions/))
+    unmount()
+
+    render(<Game />)
+    expect(await screen.findByLabelText(/Include Mega Evolutions/)).toBeChecked()
+    expect(localStorage.getItem('includeVariants')).toBe('true')
+  })
+
+  it('hides the checkbox behind a current-run summary once a run is in progress', async () => {
+    const user = await renderGame()
+
+    // renderGame's default Play uses the default (unchecked) pool.
+    await user.click(screen.getByRole('button', { name: getPokemonName(pinnedExcludingVariants) })) // correct, streak 1
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+
+    expect(screen.queryByLabelText(/Include Mega Evolutions/)).not.toBeInTheDocument()
+  })
+
+  it('resumes a restored run honoring the includeVariants it was played with', async () => {
+    localStorage.setItem('includeVariants', 'true')
+    localStorage.setItem('streak', '4')
+    localStorage.setItem('usedIds', JSON.stringify([pinnedIncludingVariants]))
+    render(<Game />)
+
+    await screen.findByRole('button', { name: 'Continue' })
+    expect(screen.getByText(/Includes Mega, regional & Gigantamax forms/)).toBeInTheDocument()
   })
 })

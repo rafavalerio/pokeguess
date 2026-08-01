@@ -7,8 +7,9 @@ Guidance for Claude Code when working in this repository.
 Pokéguess: a single-screen game that shows a Pokémon silhouette and four name
 options. Next 16 App Router, React 19, TypeScript 6, Tailwind v4, Vitest.
 There is no backend, no database and no API route — sprites come from a static
-GitHub repo, and the only persisted state is `bestStreak`, `streak` and
-`usedIds` in `localStorage`.
+GitHub repo, and the only persisted state is `bestStreak` (per generation),
+`streak`, `usedIds`, `selectedGeneration` and `includeVariants` in
+`localStorage`.
 
 ## Commands
 
@@ -38,37 +39,82 @@ a seeded or scripted `rng`. Keep it that way; do not import `Math.random` into
 
 **`components/Game.tsx` is the only stateful component.** It owns the reducer
 and composes the presentational components (`GuessGrid`, `GuessButton`,
-`PokemonSilhouette`, `ScoreBoard`, `PokedexShell`, `MainMenu`) around it. Those
-components hold no game state of their own — if you find yourself adding
-`useState` to one of them, the state probably belongs in the reducer.
+`PokemonSilhouette`, `RunRecap`, `ScoreBoard`, `PokedexShell`, `MainMenu`,
+`ScreenHeader`) around it. Those components hold no game state of their own —
+if you find yourself adding `useState` to one of them, the state probably
+belongs in the reducer.
 
-Game.tsx also owns one piece of plain (non-reducer) state: `view` (`'menu' |
-'stats' | 'game'`), which screen is showing. It starts on `'menu'` — a main
-menu / hub, currently the title, a Play button and a Stats button (best
-streak only, for now) — and switches to `'game'` to show the existing
-single-round UI unchanged. `view` deliberately isn't part of `GameState`: it's
-screen routing, not round logic, and `'menu'` renders identically on server
-and client, so it carries none of the hydration risk `pokemonId`/`options` do.
+**`ScreenHeader`** is the one title/subtitle component, used everywhere the
+app shows a heading so the three screens can't drift into different
+typography: the menu (`size="large"`, an `h1` — "Pokéguess" over "Who's that
+Pokémon?"), the stats screen (`size="small"`, an `h2`, "Stats", no subtitle),
+and the game screen (`size="small"`, "Who's that Pokémon?" over the active
+run's generation label — see below). There is exactly one `h1` per screen
+(the menu's); everything else is an `h2`, `size="small"`.
+
+Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
+'game'`), which screen is showing, and `selectedGeneration`/`includeVariants`
+(see "Generation selection" below), the menu's pool pickers. `view` starts on
+`'menu'` — a main menu / hub with the title, a Play button, and a Stats
+button — and switches to `'game'` to show the existing single-round UI
+unchanged. All three deliberately sit outside `GameState`: they're
+pre-game/screen state, not round logic, and all default identically on server
+and client (`'menu'`, `'all'`, `false`), so none carries the hydration risk
+`pokemonId`/`options` do. The `Pokéguess` title only renders on `MainMenu`
+(`view !== 'game'`); the game screen has its own `ScreenHeader` instead —
+"Who's that Pokémon?" with the active run's generation as the subtitle
+(`generationLabelFor(state.generation)`) — which stays on screen through
+every status, including the run-recap screen, so the played generation is
+never a question mid-run. `RunRecap` itself doesn't repeat the generation for
+this reason; it would just be the same text twice on the same screen.
 
 The game screen has a Home button (top right, next to `PokedexShell`'s lamps)
 that sets `view` back to `'menu'` without touching the reducer, so an
 in-progress run keeps its `pokemonId`/`options`/`status` in memory — the same
 round is still there if the player returns via Continue. Once a run is in
-progress (`streak > 0`), the menu swaps its single Play button for Continue
-(same handler as Play — the reducer already holds the right state either way)
-and Start again, which dispatches `RESTART` (a full reset, the same shape
-`NEXT` produces from the win screen or a broken streak) before switching to
-`'game'`.
+progress (`streak > 0`), the menu swaps its generation `<select>`/checkbox for
+a "current run" summary (generation, includeVariants, streak — all read
+straight off `GameState`/component state, not re-derived) and its single Play
+button for Continue (same handler as Play — the reducer already holds the
+right state either way) and Start again. Unlike Continue, Start again
+dispatches `RESTART` (a full reset, the same shape `NEXT` produces from the
+win screen or a broken streak) but deliberately does *not* switch `view` to
+`'game'` — it resets the streak and stays on the menu, so `canContinue` goes
+back to `false` and the picker reappears immediately for a fresh pick, rather
+than forcing a detour through the game screen and back via Home.
+
+**`PokedexShell`'s top-right corner holds one `cornerAction`** (`{ icon,
+label, onClick }`), not separate `onHome`/`onBack` props — Home (game screen)
+and Back (stats screen) are never both relevant at once, so `Game.tsx` picks
+whichever fits the current `view` and the button markup/styling is defined
+exactly once. The stats screen (`mode === 'stats'` in `MainMenu`) also swaps
+the title/subtitle block for a plain "Stats" heading sitting close to the top
+(`pt-1` instead of the menu's `py-10`) instead of inheriting the menu's
+centered layout, and no longer renders its own bottom Back button — that
+moved into `cornerAction`.
 
 **`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
 in-scope alternate forms — Mega Evolutions, regional forms (Alolan/Galarian/
 Hisuian/Paldean), and Gigantamax forms — each as a `PokemonEntry { id, name,
-speciesDex }`. `id` doubles as the sprite filename; `speciesDex` is the
-national dex number a form shares with its base species. `lib/pokemon.ts` is
-the hand-maintained lookup layer over it (`getPokemonEntry`, `getPokemonName`,
-`getSpeciesDex`), keyed by `id` rather than array index since ids are no
-longer contiguous once forms are included.
+speciesDex, generation }`. `id` doubles as the sprite filename; `speciesDex`
+is the national dex number a form shares with its base species, used for the
+"same family" hard-distractor grouping. `generation` is the generation *that
+entry* was introduced in, which for a form is frequently later than its base
+species' — Mega Charizard X is `generation: 6` despite Charizard being
+`generation: 1` — computed via `FORM_GENERATION_BY_KIND` in the generator
+script rather than derived from `speciesDex` (see "Generation selection"
+below). `lib/pokemon.ts` is the hand-maintained lookup layer over it
+(`getPokemonEntry`, `getPokemonName`, `getSpeciesDex`, `getSpriteUrl`), keyed
+by `id` rather than array index since ids are no longer contiguous once forms
+are included. `getSpriteUrl` is the one piece shared with `PokemonSilhouette`
+and `RunRecap` — both render a sprite for a given id, just at different sizes
+and reveal states, so the URL pattern lives here rather than being
+duplicated.
+`lib/generationDexRanges.json` is the shared source of truth for base-species
+generation boundaries — read directly by the (plain, non-TypeScript) build
+script and imported by `lib/generations.ts`, which layers display labels on
+top.
 
 **`lib/gameConfig.ts`** holds the tunable difficulty numbers — `DIFFICULTY_CURVE`
 (how many "hard" distractors appear per streak band), `DEX_PROXIMITY` and
@@ -119,6 +165,115 @@ already rendered, so it doesn't trip the hydration constraint above. Because
 the initial round was drawn with an empty exclusion set, `HYDRATE_RUN` redraws
 the round against the restored `usedIds` — same as a normal `NEXT` — rather
 than trusting the pre-hydration draw not to collide with a restored id.
+
+### The run recap screen
+
+Once a wrong guess ends a run, `Game.tsx` renders `RunRecap` in place of both
+the silhouette/name/`GuessGrid` trio *and* `ScoreBoard` (hidden for this one
+screen — see below), instead of the single-round inline reveal those
+normally show. It's a read-only summary: the run's final streak alongside the
+all-time best (highlighted if this run just set a new one), every correctly
+guessed Pokémon this run (name + small sprite, oldest first), then the missed
+answer and what was guessed instead. `Game.tsx` computes this as one
+`missedGuess` value — `null` when it doesn't apply, otherwise
+`{ correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }` —
+rather than a separate boolean plus re-reading `state.guess` at the render
+site, so TypeScript narrows `state.guess` (`number | null`) to `number` once
+instead of needing a second null check (or a cast) in the JSX. `ScoreBoard` is
+skipped (`{!missedGuess && <ScoreBoard .../>}`) only in this state — it still
+shows normally mid-round and on the win screen. Which generation the run was
+played in isn't part of `missedGuess` — it's the game screen's `ScreenHeader`
+subtitle (see above), which stays up regardless of round status, so `RunRecap`
+doesn't repeat it.
+
+The streak box's two numbers sit in a `grid-cols-2` (not `flex` + `gap`), so
+"Final streak" and "Best" each get an equal half regardless of one label
+being longer than the other — a `flex` layout there sized each column to its
+content, which visibly off-centered the divider and the numbers under it.
+
+Each row in `RecapRow` (both the correct-guess list and the missed row) is
+prefixed with a small round-number badge, 1-indexed, the missed row taking
+`correctEntries.length + 1` so the numbering continues naturally into it. The
+badge is `bg-black/10` rather than a fixed color, so it reads as "a shade
+darker than this row's own background" whether the row is `bg-screen-sunk`
+(correct) or `bg-wrong` (missed), instead of needing a separate hardcoded
+tone per row type. It's `min-w-5` + horizontal padding rather than a fixed
+`size-5`, so it stays a circle for 1-2 digit rounds but grows into a pill for
+3-4 digit ones — an "all generations" run can pass 1000, which would
+otherwise clip against a fixed-width circle.
+
+`correctEntries` is derived from `state.usedIds` minus `state.pokemonId`:
+`usedIds` already contains the id of the round just guessed wrong (added when
+that round was drawn, before it was guessed), so excluding it leaves exactly
+the ids guessed correctly so far this run, in draw order. This is also why
+the recap's own "Final streak" number — `correctEntries.length` — is used
+instead of `state.streak`: `GUESS` zeroes `state.streak` immediately on a
+wrong guess (before `NEXT` is even dispatched), so by the time the recap
+renders, `state.streak` already reads `0`. Hiding `ScoreBoard` here is what
+lets the recap use the clearer, non-conflicting "Final streak" label instead
+of reusing `ScoreBoard`'s "Streak" label for a different number.
+
+**`GameState.isNewBest`** tracks whether the most recent *correct* guess
+pushed `bestStreak` strictly past what it was before that guess — not merely
+tied it. Set in the `GUESS` case (`correct ? streak > priorBest :
+state.isNewBest`): a wrong guess never raises `bestStreak`, so it carries the
+flag forward from the last correct guess rather than recomputing (and
+wrongly clearing) it, which is what lets the recap answer "did this run set a
+new record" after the run has already ended. Reset to `false` at the start of
+every run (`createInitialState`, `restart`, both `HYDRATE_RUN` branches) —
+without that reset a fresh run would inherit whatever the previous run last
+computed.
+
+`RunRecap` has no button of its own. The persistent advance button at the
+bottom of the game screen already reads "Start again" and dispatches `NEXT`
+in this state (which behaves like `RESTART` once `streak` is already `0` —
+see the `NEXT` case in `lib/game.ts`), so the recap doesn't duplicate it.
+
+### Generation selection
+
+**`lib/generations.ts`** defines `GENERATIONS` (national dex ranges, for
+display labels and `generationForDex`'s defensive fallback only — see below)
+and `pokemonPoolFor(filter, includeVariants)`, where `filter` is `GameState`'s
+`generation: GenerationFilter` field (`'all' | number`) and `includeVariants`
+is its `includeVariants: boolean` field. A form is filtered by *its own*
+`generation` (see the `lib/pokemonData.ts` paragraph above), not its base
+species' — a Generation 1-scoped run never includes Mega Charizard X, since
+that entry's `generation` is 6. `includeVariants: false` additionally
+restricts the pool to base species (`entry.id === entry.speciesDex`); a form
+is only ever in scope when the toggle is on, regardless of which generation
+is selected. Every draw function in `lib/game.ts` (`randomPokemon`,
+`randomPokemonExcluding`, `generateOptions`, `startRound`) takes the candidate
+pool as an explicit argument rather than reading `pokemonList` directly,
+defaulting to the full list so existing call sites and tests are unaffected.
+The win condition (`usedIds.size === pool.length`) is scoped to that same
+pool, so a generation-restricted (and/or base-species-only) run can be won
+without covering the whole national dex.
+
+The menu's generation `<select>` and "include variants" checkbox are both
+plain component state in `Game.tsx` (`selectedGeneration`, `includeVariants`),
+the same "pre-game pick, not round logic" pattern as `view` — they're only
+committed into the reducer, via the `SET_GENERATION` action, when Play starts
+a genuinely fresh run (`streak === 0`). `SET_GENERATION` redraws the round
+from the new pool, resets the streak, and adopts a caller-supplied
+`bestStreak`, since only `Game.tsx` knows how to read the right
+per-generation localStorage key; the reducer stays free of I/O. Both controls
+are replaced by a "current run" summary (see above) whenever a run is in
+progress (`streak > 0`), rather than merely disabled, since there's nothing
+to pick until that run ends or is reset. `includeVariants` defaults to
+`false` (unchecked): a fresh player's pool starts as base species only.
+
+Best streaks are tracked per generation (not per `includeVariants` — that
+toggle only affects which pool a run draws from, not which stats bucket it
+counts against): `'all'` keeps the original plain `bestStreak` key (so
+upgrading an existing save doesn't lose it), and every other generation gets
+its own `bestStreak:gen<N>` key. The stats screen reads all of them into
+`allBestStreaks` and renders one row per generation plus `'all'`, rather than
+the single number it showed before this existed. The active run's generation
+and `includeVariants` are restored from the `selectedGeneration` and
+`includeVariants` keys — `HYDRATE_RUN` takes both as arguments, and they're
+these same keys, since neither control is editable during a run (they're
+replaced by the summary instead), guaranteeing they never diverge from the
+active run's actual settings.
 
 ### Hiding the answer
 

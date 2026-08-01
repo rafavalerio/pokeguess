@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { pokemonPoolFor } from './generations'
 import { pokemonList } from './pokemonData'
 import {
   createInitialState,
@@ -248,8 +249,21 @@ describe('no-repeat within a run', () => {
   })
 
   it('resets the exclusion set once the streak breaks', () => {
-    const pinnedId = idAt(0.5)
-    let state = createInitialState(makeRng([0.5]))
+    // SET_GENERATION (includeVariants: true) puts the run on the full
+    // pokemonList pool, matching idAt's assumption; createInitialState's own
+    // pre-mount round is drawn against the full list too but that's a
+    // hydration-safety exception, not what a real run uses by default (see
+    // the includeVariants describe block below) — so this test starts a run
+    // explicitly rather than relying on the raw createInitialState draw.
+    let state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    state = gameReducer(state, {
+      type: 'SET_GENERATION',
+      rng: makeRng([0.5]),
+      generation: 'all',
+      includeVariants: true,
+      bestStreak: null,
+    })
+    const pinnedId = state.pokemonId
     state = gameReducer(state, { type: 'IMAGE_READY' })
     const wrong = state.options.find((o) => o !== state.pokemonId)!
     state = gameReducer(state, { type: 'GUESS', pokemonId: wrong }) // wrong, streak 0
@@ -271,6 +285,8 @@ describe('HYDRATE_RUN', () => {
       rng: makeRng([0.5]),
       streak: 0,
       usedIds: new Set(),
+      generation: 'all',
+      includeVariants: false,
     })
     expect(hydrated).toBe(state)
   })
@@ -285,6 +301,8 @@ describe('HYDRATE_RUN', () => {
       rng: makeRng([0.5]),
       streak: 4,
       usedIds,
+      generation: 'all',
+      includeVariants: false,
     })
 
     expect(hydrated.streak).toBe(4)
@@ -305,6 +323,8 @@ describe('HYDRATE_RUN', () => {
       rng: makeRng([0.5]),
       streak: pokemonList.length,
       usedIds,
+      generation: 'all',
+      includeVariants: true,
     })
 
     expect(hydrated.status).toBe('won')
@@ -314,8 +334,19 @@ describe('HYDRATE_RUN', () => {
 
 describe('RESTART', () => {
   it('abandons an in-progress run: streak and usedIds reset, a fresh round is drawn', () => {
-    const pinnedId = idAt(0.5)
-    let state = createInitialState(makeRng([0.5]))
+    // See the identical comment in the 'no-repeat within a run' describe
+    // block above: SET_GENERATION puts the run on a known (full-list) pool
+    // so idAt's assumption holds, rather than relying on createInitialState's
+    // hydration-only pre-mount draw.
+    let state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+    state = gameReducer(state, {
+      type: 'SET_GENERATION',
+      rng: makeRng([0.5]),
+      generation: 'all',
+      includeVariants: true,
+      bestStreak: null,
+    })
+    const pinnedId = state.pokemonId
     state = gameReducer(state, { type: 'IMAGE_READY' })
     state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, streak 1
     expect(state.streak).toBe(1)
@@ -358,6 +389,9 @@ describe('winning the game', () => {
       bestStreak: 5,
       roundId: 5,
       usedIds: allUsedIds(),
+      generation: 'all',
+      includeVariants: true,
+      isNewBest: false,
     }
 
     const revealed = gameReducer(state, { type: 'GUESS', pokemonId: lastId })
@@ -377,6 +411,9 @@ describe('winning the game', () => {
       bestStreak: 6,
       roundId: 5,
       usedIds: allUsedIds(),
+      generation: 'all',
+      includeVariants: true,
+      isNewBest: false,
     }
 
     const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
@@ -396,6 +433,9 @@ describe('winning the game', () => {
       bestStreak: pokemonList.length,
       roundId: 5,
       usedIds: allUsedIds(),
+      generation: 'all',
+      includeVariants: true,
+      isNewBest: false,
     }
 
     const restarted = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
@@ -405,5 +445,221 @@ describe('winning the game', () => {
     expect(restarted.usedIds.size).toBe(1)
     expect(restarted.usedIds.has(restarted.pokemonId)).toBe(true)
     expect(restarted.bestStreak).toBe(pokemonList.length) // untouched by a restart
+  })
+})
+
+describe('generation-scoped pools', () => {
+  const gen1Pool = pokemonPoolFor(1, true)
+  const gen1Ids = new Set(gen1Pool.map((entry) => entry.id))
+
+  it('randomPokemon only draws from the given pool', () => {
+    for (let seed = 0; seed < 20; seed += 1) {
+      expect(gen1Ids.has(randomPokemon(makeRng([seed / 20]), gen1Pool).id)).toBe(true)
+    }
+  })
+
+  it('generateOptions only returns ids from the given pool', () => {
+    const answerId = gen1Pool[0].id
+    for (let seed = 0; seed < 20; seed += 1) {
+      const options = generateOptions(answerId, 0, makeRng([seed / 20]), gen1Pool)
+      for (const option of options) expect(gen1Ids.has(option)).toBe(true)
+    }
+  })
+
+  describe('SET_GENERATION', () => {
+    it('draws the fresh round from the new generation, resets the streak, and adopts the supplied best streak', () => {
+      let state = createInitialState(makeRng([0.5]))
+      state = gameReducer(state, { type: 'IMAGE_READY' })
+      state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, streak 1
+
+      const switched = gameReducer(state, {
+        type: 'SET_GENERATION',
+        rng: makeRng([0.1]),
+        generation: 1,
+        includeVariants: true,
+        bestStreak: 42,
+      })
+
+      expect(switched.generation).toBe(1)
+      expect(switched.streak).toBe(0)
+      expect(switched.status).toBe('loading')
+      expect(gen1Ids.has(switched.pokemonId)).toBe(true)
+      expect(switched.usedIds).toEqual(new Set([switched.pokemonId]))
+      expect(switched.bestStreak).toBe(42)
+    })
+
+    it('accepts a null best streak (no prior best for that generation)', () => {
+      const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+      const switched = gameReducer(state, {
+        type: 'SET_GENERATION',
+        rng: makeRng([0.1]),
+        generation: 3,
+        includeVariants: true,
+        bestStreak: null,
+      })
+      expect(switched.bestStreak).toBeNull()
+    })
+  })
+
+  describe('win condition scoped to the active generation', () => {
+    it('wins once usedIds covers the generation pool, well before the full pokemonList', () => {
+      expect(gen1Pool.length).toBeLessThan(pokemonList.length)
+      const lastId = gen1Pool[0].id
+      const state: GameState = {
+        status: 'revealed',
+        pokemonId: lastId,
+        options: [lastId, gen1Pool[1].id, gen1Pool[2].id, gen1Pool[3].id],
+        guess: lastId,
+        streak: gen1Pool.length,
+        bestStreak: gen1Pool.length,
+        roundId: 5,
+        usedIds: gen1Ids,
+        generation: 1,
+        includeVariants: true,
+        isNewBest: false,
+      }
+
+      const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+
+      expect(won.status).toBe('won')
+      expect(won.pokemonId).toBe(lastId)
+    })
+
+    it('HYDRATE_RUN lands on won when the stored run already covers the generation pool', () => {
+      const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+      const hydrated = gameReducer(state, {
+        type: 'HYDRATE_RUN',
+        rng: makeRng([0.5]),
+        streak: gen1Pool.length,
+        usedIds: gen1Ids,
+        generation: 1,
+        includeVariants: true,
+      })
+
+      expect(hydrated.status).toBe('won')
+      expect(hydrated.generation).toBe(1)
+    })
+  })
+})
+
+describe('includeVariants', () => {
+  it('defaults to false for a freshly created state', () => {
+    expect(createInitialState(makeRng([0.1, 0.2, 0.3, 0.4])).includeVariants).toBe(false)
+  })
+
+  it('SET_GENERATION with includeVariants false only ever draws base species', () => {
+    const state = createInitialState(makeRng([0.1, 0.2, 0.3, 0.4]))
+
+    for (let seed = 0; seed < 20; seed += 1) {
+      const excluded = gameReducer(state, {
+        type: 'SET_GENERATION',
+        rng: makeRng([seed / 20]),
+        generation: 'all',
+        includeVariants: false,
+        bestStreak: null,
+      })
+      expect(excluded.includeVariants).toBe(false)
+      const entry = pokemonList.find((e) => e.id === excluded.pokemonId)!
+      expect(entry.id).toBe(entry.speciesDex)
+    }
+  })
+
+  it('RESTART keeps the current includeVariants setting', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, {
+      type: 'SET_GENERATION',
+      rng: makeRng([0.1]),
+      generation: 'all',
+      includeVariants: true,
+      bestStreak: null,
+    })
+
+    const restarted = gameReducer(state, { type: 'RESTART', rng: makeRng([0.5]) })
+    expect(restarted.includeVariants).toBe(true)
+  })
+
+  it('the win condition pool shrinks to base species only when includeVariants is false', () => {
+    const baseSpeciesOnly = pokemonPoolFor('all', false)
+    const everything = pokemonPoolFor('all', true)
+    expect(baseSpeciesOnly.length).toBeLessThan(everything.length)
+
+    const lastId = baseSpeciesOnly[0].id
+    const state: GameState = {
+      status: 'revealed',
+      pokemonId: lastId,
+      options: [lastId, baseSpeciesOnly[1].id, baseSpeciesOnly[2].id, baseSpeciesOnly[3].id],
+      guess: lastId,
+      streak: baseSpeciesOnly.length,
+      bestStreak: baseSpeciesOnly.length,
+      roundId: 5,
+      usedIds: new Set(baseSpeciesOnly.map((entry) => entry.id)),
+      generation: 'all',
+      includeVariants: false,
+      isNewBest: false,
+    }
+
+    const won = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+    expect(won.status).toBe('won')
+  })
+})
+
+describe('isNewBest', () => {
+  it('flags the very first correct guess ever as a new best (bestStreak starts null)', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId })
+
+    expect(state.isNewBest).toBe(true)
+    expect(state.bestStreak).toBe(1)
+  })
+
+  it('does not flag merely tying an existing best', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'HYDRATE_BEST', bestStreak: 1 })
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // streak 1, ties the existing best
+
+    expect(state.isNewBest).toBe(false)
+    expect(state.bestStreak).toBe(1)
+  })
+
+  it('flags a correct guess that exceeds the prior best', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'HYDRATE_BEST', bestStreak: 1 })
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // streak 1, ties
+    expect(state.isNewBest).toBe(false)
+
+    state = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // streak 2, exceeds
+
+    expect(state.isNewBest).toBe(true)
+    expect(state.bestStreak).toBe(2)
+  })
+
+  it('carries the flag forward through the wrong guess that ends the run, rather than clearing it', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId }) // correct, first-ever best
+    expect(state.isNewBest).toBe(true)
+
+    state = gameReducer(state, { type: 'NEXT', rng: makeRng([0.5]) })
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    const wrong = state.options.find((o) => o !== state.pokemonId)!
+    state = gameReducer(state, { type: 'GUESS', pokemonId: wrong }) // wrong, ends the run
+
+    expect(state.streak).toBe(0)
+    expect(state.isNewBest).toBe(true)
+  })
+
+  it('resets to false at the start of a fresh run', () => {
+    let state = createInitialState(makeRng([0.5]))
+    state = gameReducer(state, { type: 'IMAGE_READY' })
+    state = gameReducer(state, { type: 'GUESS', pokemonId: state.pokemonId })
+    expect(state.isNewBest).toBe(true)
+
+    const restarted = gameReducer(state, { type: 'RESTART', rng: makeRng([0.5]) })
+    expect(restarted.isNewBest).toBe(false)
   })
 })

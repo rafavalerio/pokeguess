@@ -1,20 +1,37 @@
 'use client'
 
+import { ArrowLeft, Home } from 'lucide-react'
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
 import { guessButtonClassName } from './GuessButton'
 import GuessGrid from './GuessGrid'
-import MainMenu from './MainMenu'
+import MainMenu, { type StatsRow } from './MainMenu'
 import PokedexShell from './PokedexShell'
 import PokemonSilhouette from './PokemonSilhouette'
+import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
+import ScreenHeader from './ScreenHeader'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
+import { GENERATION_SELECT_OPTIONS, parseGenerationFilter, type GenerationFilter } from '@/lib/generations'
 import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const BEST_STREAK_KEY = 'bestStreak'
 const STREAK_KEY = 'streak'
 const USED_IDS_KEY = 'usedIds'
+const SELECTED_GENERATION_KEY = 'selectedGeneration'
+const INCLUDE_VARIANTS_KEY = 'includeVariants'
 const rng: Rng = () => Math.random()
+
+// 'all' keeps the pre-existing plain 'bestStreak' key so upgrading doesn't
+// lose anyone's saved progress; every other generation gets its own key so
+// each has an independent best streak.
+const bestStreakKey = (generation: GenerationFilter): string =>
+  generation === 'all' ? BEST_STREAK_KEY : `${BEST_STREAK_KEY}:gen${generation}`
+
+// Shared by the game screen's header subtitle and RunRecap's missedGuess
+// prop, so the two never describe the active run's pool differently.
+const generationLabelFor = (generation: GenerationFilter): string =>
+  GENERATION_SELECT_OPTIONS.find((option) => option.value === generation)?.label ?? 'All generations'
 
 // createInitialState draws from Math.random, so the state it produces
 // necessarily differs between the server render and the client's first
@@ -73,12 +90,40 @@ const Game = () => {
   // the same way, so it carries none of the hydration risk state.pokemonId
   // and state.options do.
   const [view, setView] = useState<'menu' | 'stats' | 'game'>('menu')
+  // The menu's generation picker. Plain state like `view`, not part of
+  // GameState: it's the pre-game pick, only "committed" into the reducer (via
+  // SET_GENERATION) when a fresh run actually starts — see startWithGeneration
+  // below. Defaults to 'all' on both server and client, so it carries none of
+  // the hydration risk state.pokemonId/state.options do.
+  const [selectedGeneration, setSelectedGeneration] = useState<GenerationFilter>('all')
+  // Whether Mega/regional/Gigantamax forms are in the draw pool, alongside
+  // `selectedGeneration` — same "pre-game pick" pattern, same default-false
+  // on both server and client. Independent of the generation pick since a
+  // form's own generation (when it was introduced) can differ from its base
+  // species' — see lib/generations.ts's pokemonPoolFor.
+  const [includeVariants, setIncludeVariants] = useState(false)
+  // Best streak per generation ('all' included), read from localStorage for
+  // the stats screen. Keyed by String(GenerationFilter) since object keys are
+  // always strings.
+  const [allBestStreaks, setAllBestStreaks] = useState<Record<string, number>>({})
 
   useEffect(() => {
     try {
-      const storedBest = Number(localStorage.getItem(BEST_STREAK_KEY))
-      if (Number.isFinite(storedBest) && storedBest > 0) {
-        dispatch({ type: 'HYDRATE_BEST', bestStreak: Math.floor(storedBest) })
+      const hydratedGeneration = parseGenerationFilter(localStorage.getItem(SELECTED_GENERATION_KEY))
+      setSelectedGeneration(hydratedGeneration)
+      const hydratedIncludeVariants = localStorage.getItem(INCLUDE_VARIANTS_KEY) === 'true'
+      setIncludeVariants(hydratedIncludeVariants)
+
+      const bestStreaks: Record<string, number> = {}
+      for (const option of GENERATION_SELECT_OPTIONS) {
+        const stored = Number(localStorage.getItem(bestStreakKey(option.value)))
+        if (Number.isFinite(stored) && stored > 0) bestStreaks[String(option.value)] = Math.floor(stored)
+      }
+      setAllBestStreaks(bestStreaks)
+
+      const hydratedBest = bestStreaks[String(hydratedGeneration)]
+      if (hydratedBest !== undefined) {
+        dispatch({ type: 'HYDRATE_BEST', bestStreak: hydratedBest })
       }
 
       const storedStreak = Number(localStorage.getItem(STREAK_KEY))
@@ -90,7 +135,14 @@ const Game = () => {
         storedUsedIds.length > 0 &&
         storedUsedIds.every((id) => typeof id === 'number')
       ) {
-        dispatch({ type: 'HYDRATE_RUN', rng, streak: Math.floor(storedStreak), usedIds: new Set(storedUsedIds) })
+        dispatch({
+          type: 'HYDRATE_RUN',
+          rng,
+          streak: Math.floor(storedStreak),
+          usedIds: new Set(storedUsedIds),
+          generation: hydratedGeneration,
+          includeVariants: hydratedIncludeVariants,
+        })
       }
     } catch {
       // localStorage can throw (e.g. SecurityError when site data is
@@ -102,12 +154,13 @@ const Game = () => {
   useEffect(() => {
     if (state.bestStreak !== null) {
       try {
-        localStorage.setItem(BEST_STREAK_KEY, String(state.bestStreak))
+        localStorage.setItem(bestStreakKey(state.generation), String(state.bestStreak))
+        setAllBestStreaks((prev) => ({ ...prev, [String(state.generation)]: state.bestStreak as number }))
       } catch {
         // See the read effect above: persistence is best-effort.
       }
     }
-  }, [state.bestStreak])
+  }, [state.bestStreak, state.generation])
 
   useEffect(() => {
     try {
@@ -118,10 +171,73 @@ const Game = () => {
     }
   }, [state.streak, state.usedIds])
 
+  // Persisted on every pick (not just when a run starts) so a refresh before
+  // clicking Play remembers it, and so HYDRATE_RUN above can tell which pool
+  // a restored run was drawn from — the dropdown is locked (see MainMenu)
+  // whenever a run is in progress, so this key always matches the active
+  // run's generation once one exists.
+  const handleGenerationChange = useCallback((generation: GenerationFilter) => {
+    setSelectedGeneration(generation)
+    try {
+      localStorage.setItem(SELECTED_GENERATION_KEY, String(generation))
+    } catch {
+      // See the read effect above: persistence is best-effort.
+    }
+  }, [])
+
+  const handleIncludeVariantsChange = useCallback((next: boolean) => {
+    setIncludeVariants(next)
+    try {
+      localStorage.setItem(INCLUDE_VARIANTS_KEY, String(next))
+    } catch {
+      // See the read effect above: persistence is best-effort.
+    }
+  }, [])
+
+  const startRun = useCallback(
+    (generation: GenerationFilter, includeVariantsPick: boolean) => {
+      dispatch({
+        type: 'SET_GENERATION',
+        rng,
+        generation,
+        includeVariants: includeVariantsPick,
+        bestStreak: allBestStreaks[String(generation)] ?? null,
+      })
+      setView('game')
+    },
+    [allBestStreaks],
+  )
+
+  const statsRows: StatsRow[] = GENERATION_SELECT_OPTIONS.map((option) => ({
+    key: String(option.value),
+    label: option.label,
+    value: allBestStreaks[String(option.value)] ?? null,
+  }))
+
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
   const revealed = mounted && state.status === 'revealed'
   const won = mounted && state.status === 'won'
   const canAdvance = revealed || won
+
+  // Drives the run-recap screen (see RunRecap) in place of the normal round
+  // UI once a wrong guess ends the run. Computed as one value, rather than a
+  // separate boolean plus re-reading state.guess at the render site, so
+  // TypeScript narrows state.guess (number | null) to number here instead of
+  // needing a second null check (or a cast) in the JSX below — revealed with
+  // a set guess only ever follows a real GUESS action, so guess is never
+  // actually null at this point.
+  const missedGuess =
+    revealed && state.guess !== null && state.guess !== state.pokemonId
+      ? {
+          correctEntries: [...state.usedIds]
+            .filter((id) => id !== state.pokemonId)
+            .map((id) => ({ id, name: getPokemonName(id) })),
+          bestStreak: state.bestStreak,
+          isNewBest: state.isNewBest,
+          missedAnswer: { id: state.pokemonId, name: getPokemonName(state.pokemonId) },
+          guessedAnswer: { id: state.guess, name: getPokemonName(state.guess) },
+        }
+      : null
 
   // Digits 1-4 mirror clicking an option (matching the on-screen number
   // badges), Space or N mirrors the Next/Start again button. Modifier keys
@@ -155,39 +271,59 @@ const Game = () => {
 
   if (view !== 'game') {
     return (
-      <PokedexShell>
+      <PokedexShell
+        cornerAction={
+          view === 'stats' ? { icon: ArrowLeft, label: 'Back', onClick: () => setView('menu') } : undefined
+        }
+      >
         <MainMenu
           mode={view}
-          bestStreak={state.bestStreak}
+          statsRows={statsRows}
           canContinue={state.streak > 0}
-          onPlay={() => setView('game')}
-          onStartAgain={() => {
-            dispatch({ type: 'RESTART', rng })
-            setView('game')
+          streak={state.streak}
+          generation={selectedGeneration}
+          generationOptions={GENERATION_SELECT_OPTIONS}
+          onGenerationChange={handleGenerationChange}
+          includeVariants={includeVariants}
+          onIncludeVariantsChange={handleIncludeVariantsChange}
+          onPlay={() => {
+            if (state.streak > 0) {
+              setView('game')
+              return
+            }
+            startRun(selectedGeneration, includeVariants)
           }}
+          onStartAgain={() => dispatch({ type: 'RESTART', rng })}
           onShowStats={() => setView('stats')}
-          onBack={() => setView('menu')}
         />
       </PokedexShell>
     )
   }
 
   return (
-    <PokedexShell onHome={() => setView('menu')}>
-      {/*
-        Onest's geometric letterforms carry a lot of sidebearing at display
-        sizes, so the title takes negative tracking to keep it feeling like one
-        word rather than spaced-out capitals.
-      */}
-      <h1 className="text-ink mb-1 text-center text-xl font-bold tracking-tight">Pokéguess</h1>
-      <p className="text-ink-soft mb-3 text-center text-xs">Who&apos;s that Pokémon?</p>
-
-      <div className="mb-4">
-        <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
+    <PokedexShell cornerAction={{ icon: Home, label: 'Home', onClick: () => setView('menu') }}>
+      {/* The title only appears on the main menu; this is the game screen's
+          own heading, with the active run's generation as its subtitle —
+          same ScreenHeader used everywhere else, so the two never drift into
+          different typography. */}
+      <div className="mb-3">
+        <ScreenHeader title="Who's that Pokémon?" subtitle={generationLabelFor(state.generation)} size="small" />
       </div>
+
+      {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
+          already reads 0 by this point (GUESS zeroes it immediately), and
+          RunRecap shows both numbers itself — showing both would read as a
+          contradiction. */}
+      {!missedGuess && (
+        <div className="mb-4">
+          <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
+        </div>
+      )}
 
       {won ? (
         <WinScreen streak={state.streak} />
+      ) : missedGuess ? (
+        <RunRecap {...missedGuess} />
       ) : (
         <>
           <div className="mb-3">
@@ -240,7 +376,7 @@ const Game = () => {
             _
           </span>
         )}
-        {won || (revealed && state.guess !== state.pokemonId) ? 'Start again' : 'Next'}
+        {won || missedGuess ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )
