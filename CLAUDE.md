@@ -179,6 +179,14 @@ The streak box's two numbers sit in a `grid-cols-2` (not `flex` + `gap`), so
 being longer than the other — a `flex` layout there sized each column to its
 content, which visibly off-centered the divider and the numbers under it.
 
+Each row in `RecapRow` (both the correct-guess list and the missed row) is
+prefixed with a small round-number badge, 1-indexed, the missed row taking
+`correctEntries.length + 1` so the numbering continues naturally into it. The
+badge is `bg-black/10` rather than a fixed color, so it reads as "a shade
+darker than this row's own background" whether the row is `bg-screen-sunk`
+(correct) or `bg-wrong` (missed), instead of needing a separate hardcoded
+tone per row type.
+
 `correctEntries` is derived from `state.usedIds` minus `state.pokemonId`:
 `usedIds` already contains the id of the round just guessed wrong (added when
 that round was drawn, before it was guessed), so excluding it leaves exactly

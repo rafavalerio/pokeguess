@@ -382,6 +382,9 @@ describe('Game', () => {
     expect(screen.getByText(getPokemonName(thirdId))).toBeInTheDocument()
     expect(screen.getByText('You guessed')).toBeInTheDocument()
 
+    // Each row is numbered by round, 1 onwards, with the miss as round 3.
+    expect(screen.getAllByTestId('recap-round').map((el) => el.textContent)).toEqual(['1', '2', '3'])
+
     // This is the first run ever played, so reaching a streak of 2 is a
     // genuinely new best, not just a tie.
     expect(screen.getByTestId('final-best')).toHaveTextContent('2')

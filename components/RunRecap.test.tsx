@@ -66,12 +66,27 @@ describe('RunRecap', () => {
     expect(screen.getByText('Ivysaur')).toBeInTheDocument()
   })
 
+  it('numbers each row by round, starting at 1, including the miss as the last round', () => {
+    render(<RunRecap {...baseProps} />)
+
+    const rounds = screen.getAllByTestId('recap-round').map((el) => el.textContent)
+    // Two correct entries (rounds 1-2) plus the miss as round 3.
+    expect(rounds).toEqual(['1', '2', '3'])
+  })
+
   it('shows the missed answer and what was guessed instead', () => {
     render(<RunRecap {...baseProps} correctEntries={[]} />)
 
     expect(screen.getByText('You missed')).toBeInTheDocument()
     expect(screen.getByText('Venusaur')).toBeInTheDocument()
     expect(screen.getByText('Charmander')).toBeInTheDocument()
+  })
+
+  it('numbers the miss as round 1 when the run ends on the very first round', () => {
+    render(<RunRecap {...baseProps} correctEntries={[]} />)
+
+    const rounds = screen.getAllByTestId('recap-round').map((el) => el.textContent)
+    expect(rounds).toEqual(['1'])
   })
 
   it('omits the correct-guesses list entirely when the run ended on the first round', () => {

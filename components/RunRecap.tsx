@@ -20,8 +20,20 @@ type Props = {
   guessedAnswer: RecapEntry
 }
 
-const RecapRow = ({ entry, wrong }: { entry: RecapEntry; wrong?: boolean }) => (
+const RecapRow = ({ entry, round, wrong }: { entry: RecapEntry; round: number; wrong?: boolean }) => (
   <div className={`flex items-center gap-3 rounded-lg px-2.5 py-2 ${wrong ? 'bg-wrong' : 'bg-screen-sunk'}`}>
+    {/* black/10 rather than a fixed color, so the badge reads as "a shade
+        darker than this row's own background" whether the row is
+        bg-screen-sunk (correct) or bg-wrong (missed), instead of needing a
+        separate hardcoded tone per row type. */}
+    <span
+      data-testid="recap-round"
+      className={`flex size-5 shrink-0 items-center justify-center rounded-full bg-black/10 text-xs font-semibold tabular-nums ${
+        wrong ? 'text-wrong-ink' : 'text-ink-soft'
+      }`}
+    >
+      {round}
+    </span>
     <Image
       src={getSpriteUrl(entry.id)}
       alt=""
@@ -73,15 +85,15 @@ const RunRecap = ({ generationLabel, correctEntries, bestStreak, isNewBest, miss
 
     {correctEntries.length > 0 && (
       <div className="flex max-h-52 flex-col gap-1.5 overflow-y-auto">
-        {correctEntries.map((entry) => (
-          <RecapRow key={entry.id} entry={entry} />
+        {correctEntries.map((entry, index) => (
+          <RecapRow key={entry.id} entry={entry} round={index + 1} />
         ))}
       </div>
     )}
 
     <div>
       <p className="text-ink-soft mb-1.5 text-xs font-medium">You missed</p>
-      <RecapRow entry={missedAnswer} wrong />
+      <RecapRow entry={missedAnswer} round={correctEntries.length + 1} wrong />
       <p className="text-ink-soft mt-1.5 text-xs">
         You guessed <span className="text-ink font-medium">{guessedAnswer.name}</span>
       </p>
