@@ -71,6 +71,16 @@ win screen or a broken streak) but deliberately does *not* switch `view` to
 back to `false` and the picker reappears immediately for a fresh pick, rather
 than forcing a detour through the game screen and back via Home.
 
+**`PokedexShell`'s top-right corner holds one `cornerAction`** (`{ icon,
+label, onClick }`), not separate `onHome`/`onBack` props — Home (game screen)
+and Back (stats screen) are never both relevant at once, so `Game.tsx` picks
+whichever fits the current `view` and the button markup/styling is defined
+exactly once. The stats screen (`mode === 'stats'` in `MainMenu`) also swaps
+the title/subtitle block for a plain "Stats" heading sitting close to the top
+(`pt-1` instead of the menu's `py-10`) instead of inheriting the menu's
+centered layout, and no longer renders its own bottom Back button — that
+moved into `cornerAction`.
+
 **`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
 in-scope alternate forms — Mega Evolutions, regional forms (Alolan/Galarian/
@@ -146,16 +156,20 @@ than trusting the pre-hydration draw not to collide with a restored id.
 
 ### The run recap screen
 
-Once a wrong guess ends a run, `Game.tsx` renders `RunRecap` in place of the
-silhouette/name/`GuessGrid` trio, instead of the single-round inline reveal
-those normally show. It's a read-only summary: every correctly guessed
-Pokémon this run (name + small sprite, oldest first), then the missed answer
-and what was guessed instead. `Game.tsx` computes this as one `missedGuess`
-value — `null` when it doesn't apply, otherwise `{ correctEntries,
-missedAnswer, guessedAnswer }` — rather than a separate boolean plus
-re-reading `state.guess` at the render site, so TypeScript narrows
-`state.guess` (`number | null`) to `number` once instead of needing a second
-null check (or a cast) in the JSX.
+Once a wrong guess ends a run, `Game.tsx` renders `RunRecap` in place of both
+the silhouette/name/`GuessGrid` trio *and* `ScoreBoard` (hidden for this one
+screen — see below), instead of the single-round inline reveal those
+normally show. It's a read-only summary: the run's final streak alongside the
+all-time best (highlighted if this run just set a new one), every correctly
+guessed Pokémon this run (name + small sprite, oldest first), then the missed
+answer and what was guessed instead. `Game.tsx` computes this as one
+`missedGuess` value — `null` when it doesn't apply, otherwise
+`{ correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }` —
+rather than a separate boolean plus re-reading `state.guess` at the render
+site, so TypeScript narrows `state.guess` (`number | null`) to `number` once
+instead of needing a second null check (or a cast) in the JSX. `ScoreBoard` is
+skipped (`{!missedGuess && <ScoreBoard .../>}`) only in this state — it still
+shows normally mid-round and on the win screen.
 
 `correctEntries` is derived from `state.usedIds` minus `state.pokemonId`:
 `usedIds` already contains the id of the round just guessed wrong (added when
@@ -164,11 +178,20 @@ the ids guessed correctly so far this run, in draw order. This is also why
 the recap's own "Final streak" number — `correctEntries.length` — is used
 instead of `state.streak`: `GUESS` zeroes `state.streak` immediately on a
 wrong guess (before `NEXT` is even dispatched), so by the time the recap
-renders, `state.streak` (and the `ScoreBoard` above it) already read `0`. The
-recap's number stays accurate about the run that just ended; `ScoreBoard`
-stays accurate about the (now-zero) live streak — the two intentionally
-disagree, hence the recap's number is labeled "Final streak" rather than
-reusing `ScoreBoard`'s "Streak" label.
+renders, `state.streak` already reads `0`. Hiding `ScoreBoard` here is what
+lets the recap use the clearer, non-conflicting "Final streak" label instead
+of reusing `ScoreBoard`'s "Streak" label for a different number.
+
+**`GameState.isNewBest`** tracks whether the most recent *correct* guess
+pushed `bestStreak` strictly past what it was before that guess — not merely
+tied it. Set in the `GUESS` case (`correct ? streak > priorBest :
+state.isNewBest`): a wrong guess never raises `bestStreak`, so it carries the
+flag forward from the last correct guess rather than recomputing (and
+wrongly clearing) it, which is what lets the recap answer "did this run set a
+new record" after the run has already ended. Reset to `false` at the start of
+every run (`createInitialState`, `restart`, both `HYDRATE_RUN` branches) —
+without that reset a fresh run would inherit whatever the previous run last
+computed.
 
 `RunRecap` has no button of its own. The persistent advance button at the
 bottom of the game screen already reads "Start again" and dispatches `NEXT`

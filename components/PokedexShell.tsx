@@ -1,17 +1,26 @@
 'use client'
 
-import { Home } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
 const Lamp = ({ className }: { className: string }) => (
   <span className={`rounded-full ${className}`} aria-hidden="true" />
 )
 
+// The one icon button molded into the shell's top-right corner, next to the
+// lamps — Home from the game screen, Back from the stats screen. Only one is
+// ever relevant at a time (each screen wires its own), so a single slot
+// rather than separate onHome/onBack props keeps the button markup/styling
+// defined once.
+type CornerAction = {
+  icon: LucideIcon
+  label: string
+  onClick: () => void
+}
+
 type Props = {
   children: React.ReactNode
-  // Only the game screen has somewhere to go "home" to; the menu and stats
-  // screens are already home, so they render the shell without this prop.
-  onHome?: () => void
+  cornerAction?: CornerAction
 }
 
 // The screen's content changes height across views (menu vs. stats vs. a
@@ -20,7 +29,7 @@ type Props = {
 // wrapper to it gives every one of those swaps the same smooth resize,
 // without hardcoding per-view heights. Starts at 'auto' so the very first
 // paint (server and client alike) sizes to content with no observer needed.
-const PokedexShell = ({ children, onHome }: Props) => {
+const PokedexShell = ({ children, cornerAction }: Props) => {
   const contentRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState<number | 'auto'>('auto')
 
@@ -44,17 +53,17 @@ const PokedexShell = ({ children, onHome }: Props) => {
           <Lamp className="bg-lamp-amber size-3" />
           <Lamp className="bg-lamp-green size-3" />
         </div>
-        {onHome && (
+        {cornerAction && (
           // Molded into the shell rather than pasted on top: a flat fill
           // (same red as the case) with a uniform shell-edge bezel and a
           // light icon for contrast.
           <button
             type="button"
-            onClick={onHome}
-            aria-label="Home"
+            onClick={cornerAction.onClick}
+            aria-label={cornerAction.label}
             className="bg-shell text-button/80 border-shell-edge enabled:hover:brightness-110 focus-visible:ring-screen flex items-center justify-center rounded-lg border-2 px-3 py-2 transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-[0.99] enabled:active:brightness-95"
           >
-            <Home className="size-4" aria-hidden="true" />
+            <cornerAction.icon className="size-4" aria-hidden="true" />
           </button>
         )}
       </div>

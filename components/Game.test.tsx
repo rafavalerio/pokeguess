@@ -100,8 +100,14 @@ describe('Game', () => {
     await user.click(screen.getByRole('button', { name: 'Stats' }))
     expect(await screen.findByText('9')).toBeInTheDocument()
 
+    // The stats screen swaps the title for a "Stats" heading and moves Back
+    // into the shell's corner (same slot the game screen's Home button uses).
+    expect(screen.getByRole('heading', { name: 'Stats' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Pokéguess' })).not.toBeInTheDocument()
+
     await user.click(screen.getByRole('button', { name: 'Back' }))
     expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
   })
 
   it('returns to the menu on Home, preserving the run so the menu offers Continue', async () => {
@@ -201,8 +207,10 @@ describe('Game', () => {
     if (!wrongOption) throw new Error('Expected at least one wrong option to be rendered')
     await user.click(wrongOption)
 
-    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
-    expect(screen.getByTestId('stat-best')).toHaveTextContent('7')
+    // ScoreBoard is hidden on the run-recap screen (see Game.tsx); the recap
+    // itself shows the same "best" number instead.
+    expect(screen.queryByTestId('stat-best')).not.toBeInTheDocument()
+    expect(screen.getByTestId('final-best')).toHaveTextContent('7')
     expect(localStorage.getItem('bestStreak')).toBe('7')
   })
 
@@ -270,7 +278,6 @@ describe('Game', () => {
     const answerButton = screen.getByRole('button', { name: answerName })
     const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
-    expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
 
     await user.click(screen.getByRole('button', { name: 'Start again' }))
 
@@ -374,11 +381,21 @@ describe('Game', () => {
     expect(screen.getByText(getPokemonName(thirdId))).toBeInTheDocument()
     expect(screen.getByText('You guessed')).toBeInTheDocument()
 
+    // This is the first run ever played, so reaching a streak of 2 is a
+    // genuinely new best, not just a tie.
+    expect(screen.getByTestId('final-best')).toHaveTextContent('2')
+    expect(screen.getByText('New best!')).toBeInTheDocument()
+
+    // ScoreBoard is hidden while the recap is showing — the recap carries
+    // both numbers itself.
+    expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
+
     // The persistent advance button still reads "Start again" and still
     // resets the run from here — the recap doesn't need its own button.
     await user.click(screen.getByRole('button', { name: 'Start again' }))
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedAnswerId) })).toBeInTheDocument()
     expect(screen.queryByTestId('final-streak')).not.toBeInTheDocument()
+    expect(screen.getByTestId('stat-streak')).toBeInTheDocument()
   })
 
   it("omits the correct-guesses list when the run ends on the very first round", async () => {
@@ -391,6 +408,21 @@ describe('Game', () => {
     expect(screen.getByTestId('final-streak')).toHaveTextContent('0')
     expect(screen.getByText('You missed')).toBeInTheDocument()
     expect(screen.getByText(getPokemonName(pinnedAnswerId))).toBeInTheDocument()
+  })
+
+  it('does not highlight a run that only tied the existing best streak', async () => {
+    localStorage.setItem('bestStreak', '1')
+    const user = await renderGame()
+
+    const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
+    const wrong = getGuessButtons().find((b) => b !== answerButton)!
+    await user.click(wrong)
+
+    // The very first guess of the run was wrong, so the run's streak is 0 —
+    // nowhere near the stored best of 1 — definitely not a new one.
+    expect(screen.getByTestId('final-streak')).toHaveTextContent('0')
+    expect(screen.getByTestId('final-best')).toHaveTextContent('1')
+    expect(screen.queryByText('New best!')).not.toBeInTheDocument()
   })
 })
 

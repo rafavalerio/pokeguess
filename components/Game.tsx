@@ -1,5 +1,6 @@
 'use client'
 
+import { ArrowLeft, Home } from 'lucide-react'
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
 import { guessButtonClassName } from './GuessButton'
@@ -225,6 +226,8 @@ const Game = () => {
           correctEntries: [...state.usedIds]
             .filter((id) => id !== state.pokemonId)
             .map((id) => ({ id, name: getPokemonName(id) })),
+          bestStreak: state.bestStreak,
+          isNewBest: state.isNewBest,
           missedAnswer: { id: state.pokemonId, name: getPokemonName(state.pokemonId) },
           guessedAnswer: { id: state.guess, name: getPokemonName(state.guess) },
         }
@@ -262,7 +265,11 @@ const Game = () => {
 
   if (view !== 'game') {
     return (
-      <PokedexShell>
+      <PokedexShell
+        cornerAction={
+          view === 'stats' ? { icon: ArrowLeft, label: 'Back', onClick: () => setView('menu') } : undefined
+        }
+      >
         <MainMenu
           mode={view}
           statsRows={statsRows}
@@ -282,22 +289,27 @@ const Game = () => {
           }}
           onStartAgain={() => dispatch({ type: 'RESTART', rng })}
           onShowStats={() => setView('stats')}
-          onBack={() => setView('menu')}
         />
       </PokedexShell>
     )
   }
 
   return (
-    <PokedexShell onHome={() => setView('menu')}>
+    <PokedexShell cornerAction={{ icon: Home, label: 'Home', onClick: () => setView('menu') }}>
       {/* The title only appears on the main menu; in-round, this line is the
           only heading text, so it carries a bit more size than the subtitle
           it used to be. */}
       <p className="text-ink mb-3 text-center text-sm font-semibold">Who&apos;s that Pokémon?</p>
 
-      <div className="mb-4">
-        <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
-      </div>
+      {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
+          already reads 0 by this point (GUESS zeroes it immediately), and
+          RunRecap shows both numbers itself — showing both would read as a
+          contradiction. */}
+      {!missedGuess && (
+        <div className="mb-4">
+          <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
+        </div>
+      )}
 
       {won ? (
         <WinScreen streak={state.streak} />

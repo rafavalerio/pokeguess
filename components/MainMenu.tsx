@@ -1,4 +1,4 @@
-import { ArrowLeft, Play, RotateCcw, Trophy } from 'lucide-react'
+import { Play, RotateCcw, Trophy } from 'lucide-react'
 
 import type { GenerationFilter } from '@/lib/generations'
 
@@ -45,7 +45,6 @@ type Props = {
   onPlay: () => void
   onStartAgain: () => void
   onShowStats: () => void
-  onBack: () => void
 }
 
 const MainMenu = ({
@@ -61,17 +60,23 @@ const MainMenu = ({
   onPlay,
   onStartAgain,
   onShowStats,
-  onBack,
 }: Props) => {
   const currentGenerationLabel =
     generationOptions.find((option) => option.value === generation)?.label ?? 'All generations'
 
   return (
-    <div className="flex flex-col items-center gap-6 py-10 text-center">
-      <div>
-        <h1 className="text-ink text-3xl font-bold tracking-tight">Pokéguess</h1>
-        <p className="text-ink-soft mt-1 text-xs">Who&apos;s that Pokémon?</p>
-      </div>
+    <div className={`flex flex-col items-center gap-6 text-center ${mode === 'menu' ? 'py-10' : 'pt-1 pb-6'}`}>
+      {mode === 'menu' ? (
+        <div>
+          <h1 className="text-ink text-3xl font-bold tracking-tight">Pokéguess</h1>
+          <p className="text-ink-soft mt-1 text-xs">Who&apos;s that Pokémon?</p>
+        </div>
+      ) : (
+        // Replaces the title/subtitle above (this screen has its own Back
+        // button in PokedexShell's corner, not here) — sits close to the top
+        // rather than inheriting the menu's centered, py-10 feel.
+        <h2 className="text-ink text-xl font-bold tracking-tight">Stats</h2>
+      )}
 
       {mode === 'menu' ? (
         <div className="flex w-full flex-col gap-4">
@@ -141,21 +146,15 @@ const MainMenu = ({
           </div>
         </div>
       ) : (
-        <div className="flex w-full flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            {statsRows.map((row) => (
-              <div key={row.key} className="bg-screen-sunk flex items-center justify-between rounded-xl px-4 py-3">
-                <p className="text-ink-soft text-xs font-medium">{row.label}</p>
-                {/* tabular-nums so a row's width doesn't jump between "—" and a
-                    multi-digit streak. */}
-                <p className="text-ink text-lg font-semibold tabular-nums">{row.value === null ? '—' : row.value}</p>
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={onBack} className={secondaryButtonClassName}>
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            Back
-          </button>
+        <div className="flex w-full flex-col gap-2">
+          {statsRows.map((row) => (
+            <div key={row.key} className="bg-screen-sunk flex items-center justify-between rounded-xl px-4 py-3">
+              <p className="text-ink-soft text-xs font-medium">{row.label}</p>
+              {/* tabular-nums so a row's width doesn't jump between "—" and a
+                  multi-digit streak. */}
+              <p className="text-ink text-lg font-semibold tabular-nums">{row.value === null ? '—' : row.value}</p>
+            </div>
+          ))}
         </div>
       )}
     </div>

@@ -143,6 +143,14 @@ export type GameState = {
   // species' — see lib/generations.ts's pokemonPoolFor.
   generation: GenerationFilter
   includeVariants: boolean
+  // Whether the most recent correct guess pushed `bestStreak` past what it
+  // was before that guess (a genuinely new record, not just tying an
+  // existing one). Set on every correct GUESS; a following wrong guess
+  // carries it forward unchanged (a wrong guess never raises bestStreak, so
+  // it must not flip this back to false) so the run recap can still tell
+  // whether the run that just ended set a new best. Reset to false at the
+  // start of every run.
+  isNewBest: boolean
 }
 
 export type GameAction =
@@ -193,6 +201,7 @@ export const createInitialState = (rng: Rng): GameState => {
     usedIds: new Set([round.pokemonId]),
     generation: 'all',
     includeVariants: false,
+    isNewBest: false,
   }
 }
 
@@ -216,6 +225,7 @@ const restart = (
     roundId: state.roundId + 1,
     generation,
     includeVariants,
+    isNewBest: false,
   }
 }
 
@@ -234,6 +244,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         guess: action.pokemonId,
         streak,
         bestStreak: Math.max(streak, state.bestStreak ?? 0),
+        isNewBest: correct ? streak > (state.bestStreak ?? 0) : state.isNewBest,
       }
     }
 
@@ -268,6 +279,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
           status: 'won',
           generation: action.generation,
           includeVariants: action.includeVariants,
+          isNewBest: false,
         }
       }
       const round = startRound(action.rng, action.streak, action.usedIds, pool)
@@ -279,6 +291,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         roundId: state.roundId + 1,
         generation: action.generation,
         includeVariants: action.includeVariants,
+        isNewBest: false,
       }
     }
 

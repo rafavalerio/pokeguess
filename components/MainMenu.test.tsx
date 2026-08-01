@@ -29,7 +29,6 @@ const baseProps = {
   onPlay: vi.fn<() => void>(),
   onStartAgain: vi.fn<() => void>(),
   onShowStats: vi.fn<() => void>(),
-  onBack: vi.fn<() => void>(),
 };
 
 describe("MainMenu", () => {
@@ -191,7 +190,7 @@ describe("MainMenu", () => {
     expect(onIncludeVariantsChange).toHaveBeenCalledWith(true);
   });
 
-  it("shows a best-streak row per generation in stats mode, and a Back action", () => {
+  it("shows a best-streak row per generation in stats mode", () => {
     render(
       <MainMenu
         {...baseProps}
@@ -209,18 +208,30 @@ describe("MainMenu", () => {
     expect(screen.getByText("Generation 1 · Kanto")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Back" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Play" }),
     ).not.toBeInTheDocument();
   });
 
-  it("calls onBack when Back is clicked", async () => {
-    const user = userEvent.setup();
-    const onBack = vi.fn<() => void>();
-    render(<MainMenu {...baseProps} mode="stats" onBack={onBack} />);
+  it('shows a "Stats" heading instead of the title/subtitle in stats mode', () => {
+    render(<MainMenu {...baseProps} mode="stats" />);
 
-    await user.click(screen.getByRole("button", { name: "Back" }));
-    expect(onBack).toHaveBeenCalledOnce();
+    expect(
+      screen.getByRole("heading", { name: "Stats" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Pokéguess" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Who's that Pokémon?"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("no longer renders its own Back button (moved to PokedexShell's corner)", () => {
+    render(<MainMenu {...baseProps} mode="stats" />);
+
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
   });
 });
