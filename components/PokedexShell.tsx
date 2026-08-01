@@ -46,17 +46,15 @@ const PokedexShell = ({ children, onHome }: Props) => {
         </div>
         {onHome && (
           // Molded into the shell rather than pasted on top: a flat fill
-          // (same red as the case) with a uniform shell-edge bezel. The 3D
-          // cue lives on the icon alone — a dark fill with a 1px light
-          // drop-shadow offset to the bottom right, like a glint catching the
-          // edge of a raised glyph, without shading the button itself.
+          // (same red as the case) with a uniform shell-edge bezel and a
+          // light icon for contrast.
           <button
             type="button"
             onClick={onHome}
             aria-label="Home"
-            className="bg-shell text-shell-dark border-shell-edge enabled:hover:brightness-110 focus-visible:ring-screen flex items-center justify-center rounded-lg border-2 px-3 py-2 transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-[0.99] enabled:active:brightness-95"
+            className="bg-shell text-button/80 border-shell-edge enabled:hover:brightness-110 focus-visible:ring-screen flex items-center justify-center rounded-lg border-2 px-3 py-2 transition duration-150 enabled:cursor-pointer focus-visible:ring-2 focus-visible:outline-none enabled:active:scale-[0.99] enabled:active:brightness-95"
           >
-            <Home className="size-4 drop-shadow-[1px_1px_0_rgba(255,255,255,0.4)]" aria-hidden="true" />
+            <Home className="size-4" aria-hidden="true" />
           </button>
         )}
       </div>
