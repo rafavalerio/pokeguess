@@ -39,10 +39,18 @@ a seeded or scripted `rng`. Keep it that way; do not import `Math.random` into
 
 **`components/Game.tsx` is the only stateful component.** It owns the reducer
 and composes the presentational components (`GuessGrid`, `GuessButton`,
-`PokemonSilhouette`, `RunRecap`, `ScoreBoard`, `PokedexShell`, `MainMenu`)
-around it. Those components hold no game state of their own — if you find
-yourself adding `useState` to one of them, the state probably belongs in the
-reducer.
+`PokemonSilhouette`, `RunRecap`, `ScoreBoard`, `PokedexShell`, `MainMenu`,
+`ScreenHeader`) around it. Those components hold no game state of their own —
+if you find yourself adding `useState` to one of them, the state probably
+belongs in the reducer.
+
+**`ScreenHeader`** is the one title/subtitle component, used everywhere the
+app shows a heading so the three screens can't drift into different
+typography: the menu (`size="large"`, an `h1` — "Pokéguess" over "Who's that
+Pokémon?"), the stats screen (`size="small"`, an `h2`, "Stats", no subtitle),
+and the game screen (`size="small"`, "Who's that Pokémon?" over the active
+run's generation label — see below). There is exactly one `h1` per screen
+(the menu's); everything else is an `h2`, `size="small"`.
 
 Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
 'game'`), which screen is showing, and `selectedGeneration`/`includeVariants`
@@ -52,9 +60,13 @@ button — and switches to `'game'` to show the existing single-round UI
 unchanged. All three deliberately sit outside `GameState`: they're
 pre-game/screen state, not round logic, and all default identically on server
 and client (`'menu'`, `'all'`, `false`), so none carries the hydration risk
-`pokemonId`/`options` do. The title only renders on `MainMenu` (`view !==
-'game'`); the game screen's header is just the "Who's that Pokémon?" line,
-sized up a step since it's no longer sitting under a heading.
+`pokemonId`/`options` do. The `Pokéguess` title only renders on `MainMenu`
+(`view !== 'game'`); the game screen has its own `ScreenHeader` instead —
+"Who's that Pokémon?" with the active run's generation as the subtitle
+(`generationLabelFor(state.generation)`) — which stays on screen through
+every status, including the run-recap screen, so the played generation is
+never a question mid-run. `RunRecap` itself doesn't repeat the generation for
+this reason; it would just be the same text twice on the same screen.
 
 The game screen has a Home button (top right, next to `PokedexShell`'s lamps)
 that sets `view` back to `'menu'` without touching the reducer, so an
@@ -159,20 +171,20 @@ than trusting the pre-hydration draw not to collide with a restored id.
 Once a wrong guess ends a run, `Game.tsx` renders `RunRecap` in place of both
 the silhouette/name/`GuessGrid` trio *and* `ScoreBoard` (hidden for this one
 screen — see below), instead of the single-round inline reveal those
-normally show. It's a read-only summary: which generation the run was played
-in, the run's final streak alongside the all-time best (highlighted if this
-run just set a new one), every correctly guessed Pokémon this run (name +
-small sprite, oldest first), then the missed answer and what was guessed
-instead. `Game.tsx` computes this as one `missedGuess` value — `null` when it
-doesn't apply, otherwise `{ generationLabel, correctEntries, bestStreak,
-isNewBest, missedAnswer, guessedAnswer }` — rather than a separate boolean
-plus re-reading `state.guess` at the render site, so TypeScript narrows
-`state.guess` (`number | null`) to `number` once instead of needing a second
-null check (or a cast) in the JSX. `ScoreBoard` is skipped
-(`{!missedGuess && <ScoreBoard .../>}`) only in this state — it still shows
-normally mid-round and on the win screen. `generationLabel` is resolved from
-`GENERATION_SELECT_OPTIONS` the same way `MainMenu`'s "current run" summary
-does, so the two never describe the pool differently.
+normally show. It's a read-only summary: the run's final streak alongside the
+all-time best (highlighted if this run just set a new one), every correctly
+guessed Pokémon this run (name + small sprite, oldest first), then the missed
+answer and what was guessed instead. `Game.tsx` computes this as one
+`missedGuess` value — `null` when it doesn't apply, otherwise
+`{ correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }` —
+rather than a separate boolean plus re-reading `state.guess` at the render
+site, so TypeScript narrows `state.guess` (`number | null`) to `number` once
+instead of needing a second null check (or a cast) in the JSX. `ScoreBoard` is
+skipped (`{!missedGuess && <ScoreBoard .../>}`) only in this state — it still
+shows normally mid-round and on the win screen. Which generation the run was
+played in isn't part of `missedGuess` — it's the game screen's `ScreenHeader`
+subtitle (see above), which stays up regardless of round status, so `RunRecap`
+doesn't repeat it.
 
 The streak box's two numbers sit in a `grid-cols-2` (not `flex` + `gap`), so
 "Final streak" and "Best" each get an equal half regardless of one label

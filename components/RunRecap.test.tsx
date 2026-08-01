@@ -9,7 +9,6 @@ vi.mock('next/image', () => ({
 }))
 
 const baseProps = {
-  generationLabel: 'All generations',
   correctEntries: [
     { id: 1, name: 'Bulbasaur' },
     { id: 2, name: 'Ivysaur' },
@@ -26,12 +25,6 @@ describe('RunRecap', () => {
 
     expect(screen.getByText('Final streak')).toBeInTheDocument()
     expect(screen.getByTestId('final-streak')).toHaveTextContent('2')
-  })
-
-  it('shows which generation the run was played in', () => {
-    render(<RunRecap {...baseProps} generationLabel="Generation 3 · Hoenn" />)
-
-    expect(screen.getByText('Generation 3 · Hoenn')).toBeInTheDocument()
   })
 
   it('shows the overall best streak alongside the final one', () => {

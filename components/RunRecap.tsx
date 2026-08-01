@@ -5,10 +5,6 @@ import { getSpriteUrl } from '@/lib/pokemon'
 export type RecapEntry = { id: number; name: string }
 
 type Props = {
-  // Which generation the run was played in ('All generations', 'Generation
-  // 3 · Hoenn', ...) — Game.tsx resolves this the same way MainMenu's
-  // "current run" summary does, from GENERATION_SELECT_OPTIONS.
-  generationLabel: string
   // Every Pokémon guessed correctly this run, oldest first.
   correctEntries: RecapEntry[]
   bestStreak: number | null
@@ -55,22 +51,23 @@ const RecapRow = ({ entry, round, wrong }: { entry: RecapEntry; round: number; w
 // Game.tsx) is what actually starts the next run — this is a read-only recap.
 // It carries both stat numbers ScoreBoard would otherwise show, since
 // Game.tsx hides ScoreBoard for this screen (its live "Streak" would already
-// read 0, which reads as a contradiction sitting right above this box).
-const RunRecap = ({ generationLabel, correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }: Props) => (
+// read 0, which reads as a contradiction sitting right above this box). Which
+// generation the run was played in isn't repeated here — it's already the
+// game screen's persistent ScreenHeader subtitle, above this whole screen.
+const RunRecap = ({ correctEntries, bestStreak, isNewBest, missedAnswer, guessedAnswer }: Props) => (
   <div className="mb-3 flex flex-col gap-3 text-left">
     <div
       className={`rounded-2xl px-4 py-4 text-center ${
         isNewBest ? 'bg-best/40 border-lamp-amber border-2' : 'bg-screen-sunk border-2 border-transparent'
       }`}
     >
-      <p className="text-ink-soft text-xs font-medium">{generationLabel}</p>
       {isNewBest && (
-        <p className="text-best-ink mt-1 text-xs font-semibold tracking-wide uppercase">New best!</p>
+        <p className="text-best-ink mb-2 text-xs font-semibold tracking-wide uppercase">New best!</p>
       )}
       {/* grid-cols-2 (rather than flex + gap) keeps both halves the same
           width regardless of "Final streak" being longer than "Best", so the
           divider — and each number under it — lands dead center. */}
-      <div className="divide-ink-soft/20 mt-2 grid grid-cols-2 divide-x">
+      <div className="divide-ink-soft/20 grid grid-cols-2 divide-x">
         <div>
           <p className="text-ink-soft text-xs font-medium">Final streak</p>
           <p className="text-ink mt-1 text-3xl font-semibold tabular-nums" data-testid="final-streak">

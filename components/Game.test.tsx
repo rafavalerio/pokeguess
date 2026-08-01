@@ -92,6 +92,14 @@ describe('Game', () => {
     expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
   })
 
+  it('shows a "Who\'s that Pokémon?" heading with the active generation as its subtitle on the game screen', async () => {
+    await renderGame()
+
+    const heading = screen.getByRole('heading', { name: "Who's that Pokémon?" })
+    expect(heading.tagName).toBe('H2')
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+  })
+
   it('shows the best streak on the stats screen and returns to the menu on Back', async () => {
     localStorage.setItem('bestStreak', '9')
     const user = userEvent.setup()
@@ -472,7 +480,7 @@ describe('Generation selection', () => {
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })).toBeInTheDocument()
   })
 
-  it('shows the picked generation on the run recap once the streak breaks', async () => {
+  it('shows the picked generation as the game screen\'s subtitle throughout the run, including the recap', async () => {
     const user = userEvent.setup()
     render(<Game />)
 
@@ -480,9 +488,12 @@ describe('Generation selection', () => {
     await user.click(screen.getByRole('button', { name: 'Play' }))
 
     const answerButton = await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })
+    expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
+
     const wrong = getGuessButtons().find((b) => b !== answerButton)!
     await user.click(wrong)
 
+    // Still there once the run ends and the recap replaces the round UI.
     expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
   })
 

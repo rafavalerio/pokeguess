@@ -10,6 +10,7 @@ import PokedexShell from './PokedexShell'
 import PokemonSilhouette from './PokemonSilhouette'
 import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
+import ScreenHeader from './ScreenHeader'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
 import { GENERATION_SELECT_OPTIONS, parseGenerationFilter, type GenerationFilter } from '@/lib/generations'
 import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
@@ -26,6 +27,11 @@ const rng: Rng = () => Math.random()
 // each has an independent best streak.
 const bestStreakKey = (generation: GenerationFilter): string =>
   generation === 'all' ? BEST_STREAK_KEY : `${BEST_STREAK_KEY}:gen${generation}`
+
+// Shared by the game screen's header subtitle and RunRecap's missedGuess
+// prop, so the two never describe the active run's pool differently.
+const generationLabelFor = (generation: GenerationFilter): string =>
+  GENERATION_SELECT_OPTIONS.find((option) => option.value === generation)?.label ?? 'All generations'
 
 // createInitialState draws from Math.random, so the state it produces
 // necessarily differs between the server render and the client's first
@@ -223,9 +229,6 @@ const Game = () => {
   const missedGuess =
     revealed && state.guess !== null && state.guess !== state.pokemonId
       ? {
-          generationLabel:
-            GENERATION_SELECT_OPTIONS.find((option) => option.value === state.generation)?.label ??
-            'All generations',
           correctEntries: [...state.usedIds]
             .filter((id) => id !== state.pokemonId)
             .map((id) => ({ id, name: getPokemonName(id) })),
@@ -299,10 +302,13 @@ const Game = () => {
 
   return (
     <PokedexShell cornerAction={{ icon: Home, label: 'Home', onClick: () => setView('menu') }}>
-      {/* The title only appears on the main menu; in-round, this line is the
-          only heading text, so it carries a bit more size than the subtitle
-          it used to be. */}
-      <p className="text-ink mb-3 text-center text-sm font-semibold">Who&apos;s that Pokémon?</p>
+      {/* The title only appears on the main menu; this is the game screen's
+          own heading, with the active run's generation as its subtitle —
+          same ScreenHeader used everywhere else, so the two never drift into
+          different typography. */}
+      <div className="mb-3">
+        <ScreenHeader title="Who's that Pokémon?" subtitle={generationLabelFor(state.generation)} size="small" />
+      </div>
 
       {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
           already reads 0 by this point (GUESS zeroes it immediately), and

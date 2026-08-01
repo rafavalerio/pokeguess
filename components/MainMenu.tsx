@@ -1,5 +1,6 @@
 import { Play, RotateCcw, Trophy } from 'lucide-react'
 
+import ScreenHeader from './ScreenHeader'
 import type { GenerationFilter } from '@/lib/generations'
 
 const primaryButtonClassName =
@@ -67,15 +68,12 @@ const MainMenu = ({
   return (
     <div className={`flex flex-col items-center gap-6 text-center ${mode === 'menu' ? 'py-10' : 'pt-1 pb-6'}`}>
       {mode === 'menu' ? (
-        <div>
-          <h1 className="text-ink text-3xl font-bold tracking-tight">Pokéguess</h1>
-          <p className="text-ink-soft mt-1 text-xs">Who&apos;s that Pokémon?</p>
-        </div>
+        <ScreenHeader title="Pokéguess" subtitle="Who's that Pokémon?" />
       ) : (
         // Replaces the title/subtitle above (this screen has its own Back
         // button in PokedexShell's corner, not here) — sits close to the top
         // rather than inheriting the menu's centered, py-10 feel.
-        <h2 className="text-ink text-xl font-bold tracking-tight">Stats</h2>
+        <ScreenHeader title="Stats" size="small" />
       )}
 
       {mode === 'menu' ? (
