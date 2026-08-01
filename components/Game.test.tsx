@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
@@ -28,6 +29,15 @@ vi.mock('next/image', async () => {
   return { default: MockImage }
 })
 
+// Game now opens on the main menu; every test below exercises the game
+// screen itself, so this renders and immediately clicks past the menu.
+const renderGame = async (): Promise<UserEvent> => {
+  const user = userEvent.setup()
+  render(<Game />)
+  await user.click(screen.getByRole('button', { name: 'Play' }))
+  return user
+}
+
 describe('Game', () => {
   // Math.random is pinned to 0.5 for every call in this file (see
   // beforeEach), and lib/game.ts's randomPokemon does
@@ -53,9 +63,29 @@ describe('Game', () => {
     imageLoading.neverLoads = false
   })
 
-  it('hides the options until the sprite has loaded', () => {
-    imageLoading.neverLoads = true
+  it('opens on the main menu, not the game', () => {
     render(<Game />)
+
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
+  })
+
+  it('shows the best streak on the stats screen and returns to the menu on Back', async () => {
+    localStorage.setItem('bestStreak', '9')
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Stats' }))
+    expect(await screen.findByText('9')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+  })
+
+  it('hides the options until the sprite has loaded', async () => {
+    imageLoading.neverLoads = true
+    await renderGame()
 
     // No option name is readable while the silhouette is still loading, so the
     // answer cannot be guessed from the shortlist before it is visible.
@@ -67,8 +97,7 @@ describe('Game', () => {
   })
 
   it('reveals the answer and scores a streak of 1 on a correct guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerName = getPokemonName(pinnedAnswerId)
     await user.click(screen.getByRole('button', { name: answerName }))
@@ -78,8 +107,7 @@ describe('Game', () => {
   })
 
   it('labels the advance button "Start again" after a wrong guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const wrong = screen
@@ -92,8 +120,7 @@ describe('Game', () => {
   })
 
   it('keeps the advance button labelled "Next" after a correct guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
 
@@ -104,8 +131,7 @@ describe('Game', () => {
   })
 
   it('persists the best streak to localStorage on a correct guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
 
@@ -114,8 +140,7 @@ describe('Game', () => {
 
   it('does not lower a stored best streak on a wrong guess', async () => {
     localStorage.setItem('bestStreak', '7')
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const options = await screen.findAllByRole('button', { name: /.+/ })
@@ -130,14 +155,13 @@ describe('Game', () => {
 
   it('hydrates and displays a stored best streak on mount', async () => {
     localStorage.setItem('bestStreak', '12')
-    render(<Game />)
+    await renderGame()
 
     expect(await screen.findByTestId('stat-best')).toHaveTextContent('12')
   })
 
   it('persists the streak and used ids to localStorage on a correct guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) }))
 
@@ -146,8 +170,7 @@ describe('Game', () => {
   })
 
   it('resets the persisted streak and used ids on a wrong guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const wrong = screen
@@ -165,7 +188,7 @@ describe('Game', () => {
     // first pokemonList entry that isn't excluded.
     localStorage.setItem('streak', '4')
     localStorage.setItem('usedIds', JSON.stringify([pinnedAnswerId]))
-    render(<Game />)
+    await renderGame()
 
     expect(await screen.findByTestId('stat-streak')).toHaveTextContent('4')
     const nextAnswerId = pokemonList.find((entry) => entry.id !== pinnedAnswerId)!.id
@@ -175,7 +198,7 @@ describe('Game', () => {
   it('ignores a stored run with a zero streak, starting fresh', async () => {
     localStorage.setItem('streak', '0')
     localStorage.setItem('usedIds', JSON.stringify([]))
-    render(<Game />)
+    await renderGame()
 
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedAnswerId) })).toBeInTheDocument()
   })
@@ -190,8 +213,7 @@ describe('Game', () => {
     // instead of a value that changes every NEXT, the silhouette never
     // remounts, no load event fires, and the round is stuck in 'loading'
     // forever — GUESS is rejected and the guess is silently dropped.
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerName = getPokemonName(pinnedAnswerId)
     const answerButton = screen.getByRole('button', { name: answerName })
@@ -212,8 +234,7 @@ describe('Game', () => {
   })
 
   it('scores a guess triggered by pressing the matching number key', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     // GuessGrid renders the four options before the advance button, so the
@@ -228,8 +249,7 @@ describe('Game', () => {
   })
 
   it('ignores a number key guess when a modifier key is held', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const answerIndex = screen.getAllByRole('button').slice(0, 4).indexOf(answerButton)
@@ -242,8 +262,7 @@ describe('Game', () => {
   })
 
   it('advances to the next round when Space is pressed after a correct guess', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerName = getPokemonName(pinnedAnswerId)
     await user.click(screen.getByRole('button', { name: answerName }))
@@ -262,8 +281,7 @@ describe('Game', () => {
   })
 
   it('advances via Space but not N after a wrong guess, since the button reads "Start again"', async () => {
-    const user = userEvent.setup()
-    render(<Game />)
+    const user = await renderGame()
 
     const answerButton = screen.getByRole('button', { name: getPokemonName(pinnedAnswerId) })
     const wrong = screen

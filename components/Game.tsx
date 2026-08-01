@@ -1,9 +1,10 @@
 'use client'
 
-import { useCallback, useEffect, useReducer, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
 import { guessButtonClassName } from './GuessButton'
 import GuessGrid from './GuessGrid'
+import MainMenu from './MainMenu'
 import PokedexShell from './PokedexShell'
 import PokemonSilhouette from './PokemonSilhouette'
 import ScoreBoard from './ScoreBoard'
@@ -66,6 +67,12 @@ const useMounted = () => useSyncExternalStore(emptySubscribe, () => true, () => 
 const Game = () => {
   const [state, dispatch] = useReducer(gameReducer, rng, createInitialState)
   const mounted = useMounted()
+  // Navigation between the main menu, its stats view, and the game itself.
+  // Deliberately plain state rather than part of GameState: it's screen
+  // routing, not round logic, and 'menu' on both server and client renders
+  // the same way, so it carries none of the hydration risk state.pokemonId
+  // and state.options do.
+  const [view, setView] = useState<'menu' | 'stats' | 'game'>('menu')
 
   useEffect(() => {
     try {
@@ -145,6 +152,20 @@ const Game = () => {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [state.status, state.options, state.guess, state.pokemonId])
+
+  if (view !== 'game') {
+    return (
+      <PokedexShell>
+        <MainMenu
+          mode={view}
+          bestStreak={state.bestStreak}
+          onPlay={() => setView('game')}
+          onShowStats={() => setView('stats')}
+          onBack={() => setView('menu')}
+        />
+      </PokedexShell>
+    )
+  }
 
   return (
     <PokedexShell>
