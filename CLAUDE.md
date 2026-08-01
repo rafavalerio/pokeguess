@@ -38,9 +38,27 @@ a seeded or scripted `rng`. Keep it that way; do not import `Math.random` into
 
 **`components/Game.tsx` is the only stateful component.** It owns the reducer
 and composes the presentational components (`GuessGrid`, `GuessButton`,
-`PokemonSilhouette`, `ScoreBoard`, `PokedexShell`) around it. Those components
-hold no game state of their own — if you find yourself adding `useState` to one
-of them, the state probably belongs in the reducer.
+`PokemonSilhouette`, `ScoreBoard`, `PokedexShell`, `MainMenu`) around it. Those
+components hold no game state of their own — if you find yourself adding
+`useState` to one of them, the state probably belongs in the reducer.
+
+Game.tsx also owns one piece of plain (non-reducer) state: `view` (`'menu' |
+'stats' | 'game'`), which screen is showing. It starts on `'menu'` — a main
+menu / hub, currently the title, a Play button and a Stats button (best
+streak only, for now) — and switches to `'game'` to show the existing
+single-round UI unchanged. `view` deliberately isn't part of `GameState`: it's
+screen routing, not round logic, and `'menu'` renders identically on server
+and client, so it carries none of the hydration risk `pokemonId`/`options` do.
+
+The game screen has a Home button (top right, next to `PokedexShell`'s lamps)
+that sets `view` back to `'menu'` without touching the reducer, so an
+in-progress run keeps its `pokemonId`/`options`/`status` in memory — the same
+round is still there if the player returns via Continue. Once a run is in
+progress (`streak > 0`), the menu swaps its single Play button for Continue
+(same handler as Play — the reducer already holds the right state either way)
+and Start again, which dispatches `RESTART` (a full reset, the same shape
+`NEXT` produces from the win screen or a broken streak) before switching to
+`'game'`.
 
 **`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus

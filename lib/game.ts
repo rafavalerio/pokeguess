@@ -127,6 +127,7 @@ export type GameAction =
   | { type: 'NEXT'; rng: Rng }
   | { type: 'HYDRATE_BEST'; bestStreak: number }
   | { type: 'HYDRATE_RUN'; rng: Rng; streak: number; usedIds: ReadonlySet<number> }
+  | { type: 'RESTART'; rng: Rng }
 
 const startRound = (
   rng: Rng,
@@ -140,6 +141,14 @@ const startRound = (
 export const createInitialState = (rng: Rng): GameState => {
   const round = startRound(rng, 0, new Set())
   return { ...round, streak: 0, bestStreak: null, roundId: 0, usedIds: new Set([round.pokemonId]) }
+}
+
+// A full reset, same shape whether it's triggered by the win screen's "Start
+// again", a broken streak's next round, or abandoning an in-progress run from
+// the home screen.
+const restart = (state: GameState, rng: Rng): GameState => {
+  const round = startRound(rng, 0, new Set())
+  return { ...state, ...round, streak: 0, usedIds: new Set([round.pokemonId]), roundId: state.roundId + 1 }
 }
 
 export const gameReducer = (state: GameState, action: GameAction): GameState => {
@@ -161,11 +170,7 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
     }
 
     case 'NEXT': {
-      if (state.status === 'won') {
-        // "Start again" from the win screen: a full reset, same as a broken streak.
-        const round = startRound(action.rng, 0, new Set())
-        return { ...state, ...round, streak: 0, usedIds: new Set([round.pokemonId]), roundId: state.roundId + 1 }
-      }
+      if (state.status === 'won') return restart(state, action.rng)
       if (state.streak > 0 && state.usedIds.size === pokemonList.length) {
         // The round just revealed was the last unused entry in the pool.
         return { ...state, status: 'won' }
@@ -197,6 +202,9 @@ export const gameReducer = (state: GameState, action: GameAction): GameState => 
         roundId: state.roundId + 1,
       }
     }
+
+    case 'RESTART':
+      return restart(state, action.rng)
 
     default:
       return state
