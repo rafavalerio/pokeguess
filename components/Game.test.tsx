@@ -106,7 +106,7 @@ describe('Game', () => {
     render(<Game />)
 
     await user.click(screen.getByRole('button', { name: 'Stats' }))
-    expect(await screen.findByText('9')).toBeInTheDocument()
+    expect(await screen.findByText('9/1025')).toBeInTheDocument()
 
     // The stats screen swaps the title for a "Stats" heading and moves Back
     // into the shell's corner (same slot the game screen's Home button uses).
@@ -529,9 +529,9 @@ describe('Generation selection', () => {
     await user.click(screen.getByRole('button', { name: 'Stats' }))
 
     expect(screen.getByText('All generations')).toBeInTheDocument()
-    expect(screen.getByText('9')).toBeInTheDocument()
+    expect(screen.getByText('9/1025')).toBeInTheDocument()
     expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.getByText('3/151')).toBeInTheDocument()
     // A generation with no recorded run yet shows an em dash, not 0.
     expect(screen.getByText('Generation 2 · Johto')).toBeInTheDocument()
   })

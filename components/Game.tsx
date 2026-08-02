@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, Home } from 'lucide-react'
+import { ArrowLeft, Home, Trophy } from 'lucide-react'
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
 import { guessButtonClassName } from './GuessButton'
@@ -12,7 +12,12 @@ import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
 import ScreenHeader from './ScreenHeader'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
-import { GENERATION_SELECT_OPTIONS, parseGenerationFilter, type GenerationFilter } from '@/lib/generations'
+import {
+  GENERATION_SELECT_OPTIONS,
+  parseGenerationFilter,
+  pokemonPoolFor,
+  type GenerationFilter,
+} from '@/lib/generations'
 import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const BEST_STREAK_KEY = 'bestStreak'
@@ -64,11 +69,13 @@ const GuessGridPlaceholder = () => (
   </div>
 )
 
-// Deliberately minimal — a placeholder to replace once the win screen gets
-// its own design pass.
+// Same amber "new best" treatment RunRecap uses for isNewBest (bg-best/40 +
+// border-lamp-amber), since clearing every Pokémon in the pool is always at
+// least as notable as a new streak record.
 const WinScreen = ({ streak }: { streak: number }) => (
-  <div className="bg-screen-sunk mb-3 flex flex-col items-center justify-center gap-2 rounded-2xl px-6 py-16 text-center">
-    <p className="text-ink text-base font-semibold">You&apos;ve named every Pokémon!</p>
+  <div className="bg-best/40 border-lamp-amber mb-3 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 px-6 py-16 text-center">
+    <Trophy className="text-best-ink size-10" aria-hidden="true" />
+    <p className="text-best-ink text-base font-semibold">You caught &apos;em all!</p>
     <p className="text-ink-soft text-sm">Final streak: {streak}</p>
   </div>
 )
@@ -208,10 +215,16 @@ const Game = () => {
     [allBestStreaks],
   )
 
+  // total is the base-species pool size (includeVariants: false) regardless
+  // of which pool a given run was actually played with — bestStreak is
+  // tracked per generation only, not per includeVariants (see
+  // lib/generations.ts's pokemonPoolFor), so the base pool is the one stable
+  // denominator every row can compare against.
   const statsRows: StatsRow[] = GENERATION_SELECT_OPTIONS.map((option) => ({
     key: String(option.value),
     label: option.label,
     value: allBestStreaks[String(option.value)] ?? null,
+    total: pokemonPoolFor(option.value, false).length,
   }))
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])

@@ -17,8 +17,10 @@ const selectClassName =
 
 // One row per generation (plus "All") for the stats screen. Computed by
 // Game.tsx from localStorage, since that's where the per-generation values
-// live — MainMenu just renders whatever rows it's handed.
-export type StatsRow = { key: string; label: string; value: number | null }
+// live — MainMenu just renders whatever rows it's handed. `total` is the
+// generation's base-species pool size, the denominator for "value/total";
+// value >= total means every Pokémon in that pool has been named.
+export type StatsRow = { key: string; label: string; value: number | null; total: number }
 
 type GenerationOption = { value: GenerationFilter; label: string }
 
@@ -145,14 +147,33 @@ const MainMenu = ({
         </div>
       ) : (
         <div className="flex w-full flex-col gap-2">
-          {statsRows.map((row) => (
-            <div key={row.key} className="bg-screen-sunk flex items-center justify-between rounded-xl px-4 py-3">
-              <p className="text-ink-soft text-xs font-medium">{row.label}</p>
-              {/* tabular-nums so a row's width doesn't jump between "—" and a
-                  multi-digit streak. */}
-              <p className="text-ink text-lg font-semibold tabular-nums">{row.value === null ? '—' : row.value}</p>
-            </div>
-          ))}
+          {statsRows.map((row) => {
+            // Same amber "new best" treatment RunRecap and the win screen
+            // use (bg-best/40 + border-lamp-amber): the generation where the
+            // player has named every Pokémon in its pool gets the trophy and
+            // the nicer border, and drops the "/total" since the value and
+            // the total are the same number.
+            const gotThemAll = row.value !== null && row.value >= row.total
+            return (
+              <div
+                key={row.key}
+                className={`flex items-center justify-between rounded-xl px-4 py-3 ${
+                  gotThemAll ? 'bg-best/40 border-lamp-amber border-2' : 'bg-screen-sunk border-2 border-transparent'
+                }`}
+              >
+                <p className="text-ink-soft text-xs font-medium">{row.label}</p>
+                <div className="flex items-center gap-1.5">
+                  {gotThemAll && <Trophy className="text-best-ink size-4" aria-hidden="true" />}
+                  {/* tabular-nums so a row's width doesn't jump as the value changes. */}
+                  <p
+                    className={`text-lg font-semibold tabular-nums ${gotThemAll ? 'text-best-ink' : 'text-ink'}`}
+                  >
+                    {row.value === null ? '—' : gotThemAll ? row.total : `${row.value}/${row.total}`}
+                  </p>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
