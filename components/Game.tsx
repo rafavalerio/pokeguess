@@ -326,8 +326,10 @@ const Game = () => {
       {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
           already reads 0 by this point (GUESS zeroes it immediately), and
           RunRecap shows both numbers itself — showing both would read as a
-          contradiction. */}
-      {!missedGuess && (
+          contradiction. Also hidden on the win screen, which shows its own
+          "Final streak" — repeating Streak/Best right above it would be the
+          same numbers twice on one screen. */}
+      {!missedGuess && !won && (
         <div className="mb-4">
           <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
         </div>
