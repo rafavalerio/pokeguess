@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, Home } from 'lucide-react'
+import { ArrowLeft, Home, Trophy } from 'lucide-react'
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
 import { guessButtonClassName } from './GuessButton'
@@ -12,7 +12,12 @@ import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
 import ScreenHeader from './ScreenHeader'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
-import { GENERATION_SELECT_OPTIONS, parseGenerationFilter, type GenerationFilter } from '@/lib/generations'
+import {
+  GENERATION_SELECT_OPTIONS,
+  parseGenerationFilter,
+  pokemonPoolFor,
+  type GenerationFilter,
+} from '@/lib/generations'
 import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
 
 const BEST_STREAK_KEY = 'bestStreak'
@@ -64,11 +69,13 @@ const GuessGridPlaceholder = () => (
   </div>
 )
 
-// Deliberately minimal — a placeholder to replace once the win screen gets
-// its own design pass.
+// Same amber "new best" treatment RunRecap uses for isNewBest (bg-best/40 +
+// border-lamp-amber), since clearing every Pokémon in the pool is always at
+// least as notable as a new streak record.
 const WinScreen = ({ streak }: { streak: number }) => (
-  <div className="bg-screen-sunk mb-3 flex flex-col items-center justify-center gap-2 rounded-2xl px-6 py-16 text-center">
-    <p className="text-ink text-base font-semibold">You&apos;ve named every Pokémon!</p>
+  <div className="bg-best/40 border-lamp-amber mb-3 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 px-6 py-16 text-center">
+    <Trophy className="text-best-ink size-10" aria-hidden="true" />
+    <p className="text-best-ink text-base font-semibold">You caught &apos;em all!</p>
     <p className="text-ink-soft text-sm">Final streak: {streak}</p>
   </div>
 )
@@ -208,10 +215,16 @@ const Game = () => {
     [allBestStreaks],
   )
 
+  // total is the base-species pool size (includeVariants: false) regardless
+  // of which pool a given run was actually played with — bestStreak is
+  // tracked per generation only, not per includeVariants (see
+  // lib/generations.ts's pokemonPoolFor), so the base pool is the one stable
+  // denominator every row can compare against.
   const statsRows: StatsRow[] = GENERATION_SELECT_OPTIONS.map((option) => ({
     key: String(option.value),
     label: option.label,
     value: allBestStreaks[String(option.value)] ?? null,
+    total: pokemonPoolFor(option.value, false).length,
   }))
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
@@ -240,9 +253,9 @@ const Game = () => {
       : null
 
   // Digits 1-4 mirror clicking an option (matching the on-screen number
-  // badges), Space or N mirrors the Next/Start again button. Modifier keys
-  // are left alone so this doesn't fight browser shortcuts like Cmd+1 for
-  // tab switching.
+  // badges), Space or N mirrors the Next/Start again/Main menu button.
+  // Modifier keys are left alone so this doesn't fight browser shortcuts like
+  // Cmd+1 for tab switching.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -260,7 +273,14 @@ const Game = () => {
         const isNext = state.status === 'revealed' && state.guess === state.pokemonId
         if (event.key === ' ' || (isNext && event.key.toLowerCase() === 'n')) {
           event.preventDefault()
-          dispatch({ type: 'NEXT', rng })
+          // The win screen's button navigates to the main menu rather than
+          // restarting in place — see the button below — so the shortcut
+          // that mirrors it does the same instead of dispatching NEXT.
+          if (state.status === 'won') {
+            setView('menu')
+          } else {
+            dispatch({ type: 'NEXT', rng })
+          }
         }
       }
     }
@@ -313,8 +333,10 @@ const Game = () => {
       {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
           already reads 0 by this point (GUESS zeroes it immediately), and
           RunRecap shows both numbers itself — showing both would read as a
-          contradiction. */}
-      {!missedGuess && (
+          contradiction. Also hidden on the win screen, which shows its own
+          "Final streak" — repeating Streak/Best right above it would be the
+          same numbers twice on one screen. */}
+      {!missedGuess && !won && (
         <div className="mb-4">
           <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
         </div>
@@ -360,7 +382,7 @@ const Game = () => {
 
       <button
         type="button"
-        onClick={() => dispatch({ type: 'NEXT', rng })}
+        onClick={() => (won ? setView('menu') : dispatch({ type: 'NEXT', rng }))}
         disabled={!canAdvance}
         className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
       >
@@ -376,7 +398,7 @@ const Game = () => {
             _
           </span>
         )}
-        {won || missedGuess ? 'Start again' : 'Next'}
+        {won ? 'Main menu' : missedGuess ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )

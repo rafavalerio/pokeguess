@@ -12,8 +12,8 @@ const generationOptions = [
 ];
 
 const statsRows = [
-  { key: "all", label: "All generations", value: null },
-  { key: "1", label: "Generation 1 · Kanto", value: null },
+  { key: "all", label: "All generations", value: null, total: 1025 },
+  { key: "1", label: "Generation 1 · Kanto", value: null, total: 151 },
 ];
 
 const baseProps = {
@@ -196,21 +196,38 @@ describe("MainMenu", () => {
         {...baseProps}
         mode="stats"
         statsRows={[
-          { key: "all", label: "All generations", value: 12 },
-          { key: "1", label: "Generation 1 · Kanto", value: 5 },
-          { key: "2", label: "Generation 2 · Johto", value: null },
+          { key: "all", label: "All generations", value: 12, total: 1025 },
+          { key: "1", label: "Generation 1 · Kanto", value: 5, total: 151 },
+          { key: "2", label: "Generation 2 · Johto", value: null, total: 100 },
         ]}
       />,
     );
 
     expect(screen.getByText("All generations")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("12/1025")).toBeInTheDocument();
     expect(screen.getByText("Generation 1 · Kanto")).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("5/151")).toBeInTheDocument();
     expect(screen.getByText("—")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Play" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("shows a trophy and just the total, with no run-in-progress state, for a fully-completed generation", () => {
+    render(
+      <MainMenu
+        {...baseProps}
+        mode="stats"
+        statsRows={[
+          { key: "all", label: "All generations", value: 12, total: 1025 },
+          { key: "1", label: "Generation 1 · Kanto", value: 151, total: 151 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("12/1025")).toBeInTheDocument();
+    expect(screen.queryByText("151/151")).not.toBeInTheDocument();
+    expect(screen.getByText("151")).toBeInTheDocument();
   });
 
   it('shows a "Stats" heading instead of the title/subtitle in stats mode', () => {
