@@ -436,6 +436,33 @@ describe('Game', () => {
     expect(screen.getByTestId('final-best')).toHaveTextContent('1')
     expect(screen.queryByText('New best!')).not.toBeInTheDocument()
   })
+
+  it('shows a trophy win screen whose "Main menu" button returns home without restarting the run', async () => {
+    const pool = pokemonPoolFor('all', false)
+    localStorage.setItem('streak', String(pool.length))
+    localStorage.setItem('usedIds', JSON.stringify(pool.map((entry) => entry.id)))
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(await screen.findByRole('button', { name: 'Continue' }))
+
+    expect(screen.getByText("You caught 'em all!")).toBeInTheDocument()
+    // ScoreBoard's Streak/Best line is hidden here too — the win screen's own
+    // box already shows "Final streak", so repeating it would be redundant.
+    expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start again' })).not.toBeInTheDocument()
+
+    // Unlike "Start again" elsewhere, this button doesn't reset the run — it
+    // just navigates home, leaving the completed run intact so Continue still
+    // lands back on this same win screen.
+    await user.click(screen.getByRole('button', { name: 'Main menu' }))
+
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    expect(screen.getByText("You caught 'em all!")).toBeInTheDocument()
+  })
 })
 
 describe('Generation selection', () => {

@@ -253,9 +253,9 @@ const Game = () => {
       : null
 
   // Digits 1-4 mirror clicking an option (matching the on-screen number
-  // badges), Space or N mirrors the Next/Start again button. Modifier keys
-  // are left alone so this doesn't fight browser shortcuts like Cmd+1 for
-  // tab switching.
+  // badges), Space or N mirrors the Next/Start again/Main menu button.
+  // Modifier keys are left alone so this doesn't fight browser shortcuts like
+  // Cmd+1 for tab switching.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return
@@ -273,7 +273,14 @@ const Game = () => {
         const isNext = state.status === 'revealed' && state.guess === state.pokemonId
         if (event.key === ' ' || (isNext && event.key.toLowerCase() === 'n')) {
           event.preventDefault()
-          dispatch({ type: 'NEXT', rng })
+          // The win screen's button navigates to the main menu rather than
+          // restarting in place — see the button below — so the shortcut
+          // that mirrors it does the same instead of dispatching NEXT.
+          if (state.status === 'won') {
+            setView('menu')
+          } else {
+            dispatch({ type: 'NEXT', rng })
+          }
         }
       }
     }
@@ -375,7 +382,7 @@ const Game = () => {
 
       <button
         type="button"
-        onClick={() => dispatch({ type: 'NEXT', rng })}
+        onClick={() => (won ? setView('menu') : dispatch({ type: 'NEXT', rng }))}
         disabled={!canAdvance}
         className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
       >
@@ -391,7 +398,7 @@ const Game = () => {
             _
           </span>
         )}
-        {won || missedGuess ? 'Start again' : 'Next'}
+        {won ? 'Main menu' : missedGuess ? 'Start again' : 'Next'}
       </button>
     </PokedexShell>
   )
