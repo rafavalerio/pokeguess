@@ -1,4 +1,4 @@
-import { Play, RotateCcw, Trophy } from 'lucide-react'
+import { ChevronDown, Play, RotateCcw, Trophy } from 'lucide-react'
 
 import ScreenHeader from './ScreenHeader'
 import type { GenerationFilter } from '@/lib/generations'
@@ -13,7 +13,7 @@ const secondaryButtonClassName =
 // below), so neither this nor the checkbox below it needs disabled: styling
 // — they're never shown in a disabled state.
 const selectClassName =
-  'bg-button text-ink border-screen-sunk focus-visible:ring-shell hover:border-shell w-full cursor-pointer rounded-lg border-2 px-3 py-2.5 text-sm font-medium transition duration-150 focus-visible:ring-2 focus-visible:outline-none'
+  'bg-button text-ink border-screen-sunk focus-visible:ring-shell hover:border-shell w-full cursor-pointer appearance-none rounded-lg border-2 py-2.5 pr-9 pl-3 text-sm font-medium transition duration-150 focus-visible:ring-2 focus-visible:outline-none'
 
 // One row per generation (plus "All") for the stats screen. Computed by
 // Game.tsx from localStorage, since that's where the per-generation values
@@ -100,28 +100,34 @@ const MainMenu = ({
               <label htmlFor="generation" className="text-ink-soft mb-1 block text-xs font-medium">
                 Generation
               </label>
-              <select
-                id="generation"
-                value={String(generation)}
-                onChange={(event) => {
-                  const raw = event.target.value
-                  onGenerationChange(raw === 'all' ? 'all' : Number(raw))
-                }}
-                className={selectClassName}
-              >
-                {generationOptions.map((option) => (
-                  <option key={option.value} value={String(option.value)}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <select
+                  id="generation"
+                  value={String(generation)}
+                  onChange={(event) => {
+                    const raw = event.target.value
+                    onGenerationChange(raw === 'all' ? 'all' : Number(raw))
+                  }}
+                  className={selectClassName}
+                >
+                  {generationOptions.map((option) => (
+                    <option key={option.value} value={String(option.value)}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown
+                  className="text-ink-soft pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2"
+                  aria-hidden="true"
+                />
+              </div>
               <label htmlFor="includeVariants" className="text-ink mt-3 flex items-start gap-2 text-xs font-medium">
                 <input
                   id="includeVariants"
                   type="checkbox"
                   checked={includeVariants}
                   onChange={(event) => onIncludeVariantsChange(event.target.checked)}
-                  className="accent-shell border-screen-sunk focus-visible:ring-shell mt-0.5 size-4 shrink-0 cursor-pointer rounded border-2 focus-visible:ring-2 focus-visible:outline-none"
+                  className="accent-shell border-screen-sunk focus-visible:ring-shell size-4 shrink-0 cursor-pointer rounded border-2 focus-visible:ring-2 focus-visible:outline-none"
                 />
                 <span>Include Mega Evolutions, regional & Gigantamax forms</span>
               </label>
