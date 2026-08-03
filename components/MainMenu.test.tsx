@@ -207,7 +207,7 @@ describe("MainMenu", () => {
     expect(screen.getByText("12/1025")).toBeInTheDocument();
     expect(screen.getByText("Generation 1 · Kanto")).toBeInTheDocument();
     expect(screen.getByText("5/151")).toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("—/100")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Play" }),
     ).not.toBeInTheDocument();
