@@ -19,6 +19,10 @@
 
   --color-ink: #2c2c2a;
   --color-ink-soft: #6f6d66;
+  /* Sits between --color-ink and --color-ink-soft, for values (e.g. stats
+     totals) that need more weight than a muted label next to them without
+     jumping all the way to near-black. */
+  --color-ink-strong: #54534e;
 
   --color-correct: #dff0c8;
   --color-correct-ink: #2f5b12;

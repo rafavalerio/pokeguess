@@ -172,9 +172,9 @@ const MainMenu = ({
                   {gotThemAll && <Trophy className="text-best-ink size-4" aria-hidden="true" />}
                   {/* tabular-nums so a row's width doesn't jump as the value changes. */}
                   <p
-                    className={`text-lg font-semibold tabular-nums ${gotThemAll ? 'text-best-ink' : 'text-ink'}`}
+                    className={`text-lg font-semibold tabular-nums ${gotThemAll ? 'text-best-ink' : 'text-ink-strong'}`}
                   >
-                    {row.value === null ? '—' : gotThemAll ? row.total : `${row.value}/${row.total}`}
+                    {row.value === null ? `—/${row.total}` : gotThemAll ? row.total : `${row.value}/${row.total}`}
                   </p>
                 </div>
               </div>
