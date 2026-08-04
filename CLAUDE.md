@@ -51,19 +51,25 @@ of its own — if you find yourself adding `useState` to one of them, the
 state probably belongs in one of the two reducers.
 
 **`ScreenHeader`** is the one title/subtitle component, used everywhere the
-app shows a heading so the three screens can't drift into different
-typography: the menu (`size="large"`, an `h1` — "Pokéguess" over "Who's that
-Pokémon?"), the stats screen (`size="small"`, an `h2`, "Stats", no subtitle),
-and the game screen (`size="small"`, "Who's that Pokémon?" over the active
-run's generation label — see below). There is exactly one `h1` per screen
-(the menu's); everything else is an `h2`, `size="small"`.
+app shows a heading so no screen can drift into different typography: the
+menu (`size="large"`, an `h1` — "Pokéguess" over "Who's that Pokémon?"), the
+stats screen (`size="small"`, an `h2`, "Stats", no subtitle), the Challenges
+screen (`size="small"`, an `h2`, "Challenges", no subtitle — same `MainMenu`
+component as stats, just a different `mode`), the game screen (`size="small"`,
+"Who's that Pokémon?" over the active run's generation label — see below),
+and the Time Trial screen (`size="small"`, "Time Trial" over that same
+generation label, set from `Game.tsx`'s `view === 'timeTrial'` branch). There
+is exactly one `h1` per screen (the menu's); everything else is an `h2`,
+`size="small"`.
 
 Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
-'game'`), which screen is showing, and `selectedGeneration`/`includeVariants`
-(see "Generation selection" below), the menu's pool pickers. `view` starts on
-`'menu'` — a main menu / hub with the title, a Play button, and a Stats
-button — and switches to `'game'` to show the existing single-round UI
-unchanged. All three deliberately sit outside `GameState`: they're
+'game' | 'timeTrial' | 'challenges'`), which screen is showing, and
+`selectedGeneration`/`includeVariants` (see "Generation selection" below),
+the menu's pool pickers. `view` starts on `'menu'` — a main menu / hub with
+the title, Full Dex and Time Trial buttons (the two modes a fresh player can
+start), and Stats and Challenges buttons (each mode's own best-record
+screen) — and switches to `'game'` or `'timeTrial'` to show that mode's UI.
+All three deliberately sit outside `GameState`: they're
 pre-game/screen state, not round logic, and all default identically on server
 and client (`'menu'`, `'all'`, `false`), so none carries the hydration risk
 `pokemonId`/`options` do. The `Pokéguess` title only renders on `MainMenu`
@@ -80,9 +86,16 @@ in-progress run keeps its `pokemonId`/`options`/`status` in memory — the same
 round is still there if the player returns via Continue. Once a run is in
 progress (`streak > 0`), the menu swaps its generation `<select>`/checkbox for
 a "current run" summary (generation, includeVariants, streak — all read
-straight off `GameState`/component state, not re-derived) and its single Play
-button for Continue (same handler as Play — the reducer already holds the
-right state either way) and Start again. Unlike Continue, Start again
+straight off `GameState`/component state, not re-derived) and its Full
+Dex/Time Trial buttons for Continue and Start again — Time Trial has no
+equivalent "current run" to resume, so it's simply unavailable until the Full
+Dex run in progress ends or is reset (see `MainMenu`'s `canContinue` prop).
+Continue and Full Dex are deliberately separate handlers, not the same one:
+`onContinue` is just `setView('game')`, since the reducer already holds the
+in-progress run's state and nothing needs to change to show it, while
+`onPlayFullDex` calls `startRun`, which dispatches `SET_GENERATION` — a full
+reset — because Full Dex is only reachable here when there's no run to
+resume. Start again also
 dispatches `RESTART` (a full reset, the same shape `NEXT` produces from the
 win screen or a broken streak) but deliberately does *not* switch `view` to
 `'game'` — it resets the streak and stays on the menu, so `canContinue` goes
@@ -90,14 +103,17 @@ back to `false` and the picker reappears immediately for a fresh pick, rather
 than forcing a detour through the game screen and back via Home.
 
 **`PokedexShell`'s top-right corner holds one `cornerAction`** (`{ icon,
-label, onClick }`), not separate `onHome`/`onBack` props — Home (game screen)
-and Back (stats screen) are never both relevant at once, so `Game.tsx` picks
-whichever fits the current `view` and the button markup/styling is defined
-exactly once. The stats screen (`mode === 'stats'` in `MainMenu`) also swaps
-the title/subtitle block for a plain "Stats" heading sitting close to the top
-(`pt-1` instead of the menu's `py-10`) instead of inheriting the menu's
-centered layout, and no longer renders its own bottom Back button — that
-moved into `cornerAction`.
+label, onClick }`), not separate `onHome`/`onBack` props — Home and Back are
+never both relevant at once, so `Game.tsx` picks whichever fits the current
+`view` and the button markup/styling is defined exactly once: Home for
+`'game'` and `'timeTrial'` (both return to the menu without resetting
+anything — Time Trial has no persisted "current run" to preserve, but the
+label and behavior are the same), Back for `'stats'` and `'challenges'`. The
+stats and Challenges screens (`mode === 'stats' | 'challenges'` in
+`MainMenu`) also swap the title/subtitle block for a plain "Stats"/
+"Challenges" heading sitting close to the top (`pt-1` instead of the menu's
+`py-10`) instead of inheriting the menu's centered layout, and neither
+renders its own bottom Back button — that moved into `cornerAction`.
 
 **`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
@@ -304,8 +320,8 @@ without covering the whole national dex.
 The menu's generation `<select>` and "include variants" checkbox are both
 plain component state in `Game.tsx` (`selectedGeneration`, `includeVariants`),
 the same "pre-game pick, not round logic" pattern as `view` — they're only
-committed into the reducer, via the `SET_GENERATION` action, when Play starts
-a genuinely fresh run (`streak === 0`). `SET_GENERATION` redraws the round
+committed into the reducer, via the `SET_GENERATION` action, when Full Dex
+starts a genuinely fresh run (`streak === 0`). `SET_GENERATION` redraws the round
 from the new pool, resets the streak, and adopts a caller-supplied
 `bestStreak`, since only `Game.tsx` knows how to read the right
 per-generation localStorage key; the reducer stays free of I/O. Both controls

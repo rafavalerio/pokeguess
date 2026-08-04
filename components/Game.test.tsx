@@ -1,12 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
+import { TIME_TRIAL_REVEAL_MS, TIME_TRIAL_ROUND_COUNT } from '@/lib/gameConfig'
 import { pokemonPoolFor } from '@/lib/generations'
 import { getPokemonName } from '@/lib/pokemon'
 import { pokemonList } from '@/lib/pokemonData'
+import { formatElapsedMs } from '@/lib/timeTrial'
 
 // Lets a test hold the sprite in its loading state by withholding the load
 // event, which is otherwise fired immediately on mount.
@@ -690,5 +692,95 @@ describe('Include variants', () => {
 
     await screen.findByRole('button', { name: 'Continue' })
     expect(screen.getByText(/Includes Mega, regional & Gigantamax forms/)).toBeInTheDocument()
+  })
+})
+
+// Resolves on the next microtask, mimicking a cache-warm image load — same
+// shape as components/TimeTrialGame.test.tsx's MockPreloadImage, needed here
+// because TimeTrialGame's preload effect calls `new window.Image()` directly
+// rather than going through next/image (which is mocked above).
+class MockPreloadImage {
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  set src(_value: string) {
+    Promise.resolve().then(() => this.onload?.())
+  }
+}
+
+// Clicks the first rendered guess option every round and lets the
+// auto-advance timer fire, mirroring TimeTrialGame.test.tsx's playThrough
+// helper. Ground truth (right or wrong) doesn't matter for what the "Time
+// Trial persistence" tests below assert — only that a full trial completes
+// and reports exactly once — so unlike that helper this doesn't need to read
+// round-answer to tally a correct count.
+const playTimeTrialThrough = async (user: UserEvent): Promise<void> => {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0) // let the preload microtasks settle
+  })
+
+  for (let round = 1; round <= TIME_TRIAL_ROUND_COUNT; round += 1) {
+    expect(screen.getByText(`Round ${round}/${TIME_TRIAL_ROUND_COUNT}`)).toBeInTheDocument()
+    const guessButtons = screen.getAllByRole('button').filter((b) => b.getAttribute('aria-label') !== 'Home')
+    await user.click(guessButtons[0])
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TIME_TRIAL_REVEAL_MS)
+    })
+  }
+}
+
+// Exercises handleTimeTrialFinish (components/Game.tsx) end to end: the
+// localStorage write-then-read round trip for a completed Time Trial had
+// zero coverage before this — components/TimeTrialGame.test.tsx only
+// asserts the shape of the payload passed to onFinish, never what the
+// parent actually does with it, which is exactly how the "New personal
+// best!" banner bug (isNewBest recomputed from a personalBest prop that had
+// already been overwritten with the just-finished result) shipped unnoticed.
+describe('Time Trial persistence', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.stubGlobal('Image', MockPreloadImage)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('persists a finished trial to localStorage and reflects it on the Challenges screen', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Time Trial' }))
+    await playTimeTrialThrough(user)
+
+    // The results screen only renders once the trial has actually reached
+    // 'finished', so this also confirms all 10 rounds went through.
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
+
+    const storedBest: unknown = JSON.parse(localStorage.getItem('timeTrialBest') ?? 'null')
+    expect(storedBest).toMatchObject({
+      rank: expect.any(String),
+      elapsedMs: expect.any(Number),
+      correct: expect.any(Number),
+    })
+    expect(localStorage.getItem('timeTrialAttempts')).toBe('1')
+
+    await user.click(screen.getByRole('button', { name: 'Main menu' }))
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Challenges' }))
+
+    // Scoped to the "All generations" row specifically, since every other
+    // generation's row still legitimately reads "Not played yet" — this run
+    // was unscoped (the default 'all' generation), so only that row should
+    // have changed.
+    const allGenerationsRow = screen.getByText('All generations').closest('div')!.parentElement!
+    expect(within(allGenerationsRow).queryByText('Not played yet')).not.toBeInTheDocument()
+    expect(within(allGenerationsRow).getByText('Played 1 time')).toBeInTheDocument()
+    const best = storedBest as { rank: string; elapsedMs: number }
+    expect(within(allGenerationsRow).getByText(best.rank)).toBeInTheDocument()
+    expect(within(allGenerationsRow).getByText(formatElapsedMs(best.elapsedMs))).toBeInTheDocument()
   })
 })

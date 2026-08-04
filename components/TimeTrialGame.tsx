@@ -62,6 +62,16 @@ const TimeTrialGame = ({ generation, includeVariants, personalBest, onFinish, on
   // Drives the ticking clock display; the reducer's own startedAt/finishedAt
   // stay the source of truth for the score itself (see lib/timeTrial.ts).
   const [displayNow, setDisplayNow] = useState<number>(() => Date.now())
+  // Snapshotted once, inside the report-once effect below, against
+  // `personalBest` as it reads AT THAT MOMENT (the old best, before
+  // onFinish's result flows back down). Recomputing isNewBest live in the
+  // 'finished' render branch from the (prop) personalBest would break the
+  // instant onFinish's parent update lands: Game.tsx's handleTimeTrialFinish
+  // writes this very result as the new personalBest, so a live
+  // isBetterTimeTrialResult(candidate, candidate) then compares the result
+  // against itself and returns false — the banner would flash true for one
+  // render, then vanish.
+  const [finishedIsNewBest, setFinishedIsNewBest] = useState(false)
 
   // Preloads every answer sprite before round 1 is shown, so no player's
   // score is skewed by their connection speed — see the design spec's
@@ -121,8 +131,16 @@ const TimeTrialGame = ({ generation, includeVariants, personalBest, onFinish, on
     if (state.status !== 'finished' || state.finishedAt === null || state.startedAt === null) return
     const correct = state.results.filter((result) => result.correct).length
     const elapsedMs = state.finishedAt - state.startedAt
-    onFinish({ generation, correct, elapsedMs, rank: rankTimeTrial(correct, elapsedMs) })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only finishedAt identifies a new report-worthy finish
+    const rank = rankTimeTrial(correct, elapsedMs)
+    // personalBest here is still the OLD best — this effect runs before
+    // onFinish's parent-side update (setChallengesData) can flow back down
+    // as a new prop value, so this is the correct "was this actually an
+    // improvement" comparison, snapshotted once rather than left to be
+    // recomputed later against a personalBest that has since become the
+    // candidate itself.
+    setFinishedIsNewBest(isBetterTimeTrialResult({ rank, elapsedMs, correct }, personalBest))
+    onFinish({ generation, correct, elapsedMs, rank })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only finishedAt identifies a new report-worthy finish; personalBest is read as of this render deliberately, not tracked as a dep
   }, [state.status, state.finishedAt])
 
   if (state.status === 'finished') {
@@ -136,7 +154,7 @@ const TimeTrialGame = ({ generation, includeVariants, personalBest, onFinish, on
         correct={correct}
         totalRounds={state.rounds.length}
         results={state.results}
-        isNewBest={isBetterTimeTrialResult({ rank, elapsedMs, correct }, personalBest)}
+        isNewBest={finishedIsNewBest}
         onRetry={() => dispatch({ type: 'START', rng, generation, includeVariants })}
         onMainMenu={onExit}
       />
@@ -146,7 +164,18 @@ const TimeTrialGame = ({ generation, includeVariants, personalBest, onFinish, on
   if (state.status === 'preparing') return <Preparing />
 
   const currentRound = state.rounds[state.roundIndex]
-  const elapsedMs = state.startedAt === null ? 0 : displayNow - state.startedAt
+  // Clamped to zero: displayNow is initialized at mount, before startedAt is
+  // set (startedAt is only set once preload resolves, via PRELOADED — see
+  // the displayNow state comment above), and the ticking interval's first
+  // tick doesn't fire until 100ms later. Without the clamp, the render right
+  // after PRELOADED computes displayNow - startedAt against that stale
+  // mount-time displayNow, going negative for up to 100ms and rendering a
+  // garbled time via formatElapsedMs (which has no negative-number guard).
+  // Preferring finishedAt over displayNow once it's set also keeps this
+  // live number consistent with what the results screen shows immediately
+  // after — otherwise the very last tick can lag slightly behind the
+  // persisted finishedAt - startedAt, causing a visible jump.
+  const elapsedMs = state.startedAt === null ? 0 : Math.max(0, (state.finishedAt ?? displayNow) - state.startedAt)
 
   return (
     <>

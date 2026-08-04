@@ -237,24 +237,31 @@ const Game = () => {
   // the stored personal best, writes if it's better, always increments the
   // attempts counter, and updates challengesData so the Challenges screen
   // reflects the new result immediately without a reload.
+  //
+  // The localStorage writes happen here, in the callback body, computed from
+  // `challengesData` directly (a dependency of this callback, so it's never
+  // stale) — not inside the setChallengesData updater below. React may
+  // invoke a state updater more than once per commit (e.g. under
+  // StrictMode, which next.config.mjs enables via reactStrictMode), and an
+  // updater is expected to be a pure function of its previous state with no
+  // side effects. The updater here only computes and returns the next
+  // state; every side effect happens exactly once, before it's called.
   const handleTimeTrialFinish = useCallback(
     (result: { generation: GenerationFilter; correct: number; elapsedMs: number; rank: TimeTrialRank }) => {
       const key = String(result.generation)
       const candidate: TimeTrialBest = { rank: result.rank, elapsedMs: result.elapsedMs, correct: result.correct }
-      setChallengesData((prev) => {
-        const current = prev[key] ?? { best: null, attempts: 0 }
-        const best = isBetterTimeTrialResult(candidate, current.best) ? candidate : current.best
-        const attempts = current.attempts + 1
-        try {
-          localStorage.setItem(timeTrialBestKey(result.generation), JSON.stringify(best))
-          localStorage.setItem(timeTrialAttemptsKey(result.generation), String(attempts))
-        } catch {
-          // See the read effect above: persistence is best-effort.
-        }
-        return { ...prev, [key]: { best, attempts } }
-      })
+      const current = challengesData[key] ?? { best: null, attempts: 0 }
+      const best = isBetterTimeTrialResult(candidate, current.best) ? candidate : current.best
+      const attempts = current.attempts + 1
+      try {
+        localStorage.setItem(timeTrialBestKey(result.generation), JSON.stringify(best))
+        localStorage.setItem(timeTrialAttemptsKey(result.generation), String(attempts))
+      } catch {
+        // See the read effect above: persistence is best-effort.
+      }
+      setChallengesData((prev) => ({ ...prev, [key]: { best, attempts } }))
     },
-    [],
+    [challengesData],
   )
 
   // total is the base-species pool size (includeVariants: false) regardless

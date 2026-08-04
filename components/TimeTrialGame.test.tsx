@@ -1,5 +1,6 @@
 import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import TimeTrialGame from './TimeTrialGame'
@@ -11,6 +12,7 @@ import {
   type TimeTrialRank,
 } from '@/lib/gameConfig'
 import type { GenerationFilter } from '@/lib/generations'
+import type { TimeTrialBest } from '@/lib/timeTrial'
 
 type FinishPayload = { generation: GenerationFilter; correct: number; elapsedMs: number; rank: TimeTrialRank }
 
@@ -183,5 +185,53 @@ describe('TimeTrialGame', () => {
       await vi.advanceTimersByTimeAsync(TIME_TRIAL_PRELOAD_FALLBACK_MS)
     })
     expect(screen.getByText(`Round 1/${TIME_TRIAL_ROUND_COUNT}`)).toBeInTheDocument()
+  })
+
+  // Regression test for a bug where "New personal best!" flashed for one
+  // render then vanished: isNewBest used to be recomputed live, on every
+  // render of the 'finished' branch, from the `personalBest` prop — but
+  // Game.tsx's handleTimeTrialFinish (this test's ParentStub stands in for
+  // it) writes the just-finished result as the new personalBest the moment
+  // onFinish fires, so the very next render compared the candidate against
+  // itself and isBetterTimeTrialResult returned false. This wraps
+  // TimeTrialGame in a stub parent that reproduces that same prop update, so
+  // the assertion below only passes if isNewBest was snapshotted once at the
+  // moment the trial finished rather than derived from the mutating prop.
+  it('keeps showing "New personal best!" even after onFinish causes the parent to overwrite personalBest with this very result', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    // Rank D with a very generous elapsed time: any completed trial — even
+    // one that gets every round wrong — beats this on the elapsedMs
+    // tiebreaker (same D rank, but nowhere near 999 seconds), so this
+    // doesn't depend on guessing correctly.
+    const beatablePersonalBest: TimeTrialBest = { rank: 'D', elapsedMs: 999_000, correct: 0 }
+
+    const ParentStub = () => {
+      const [personalBest, setPersonalBest] = useState<TimeTrialBest | null>(beatablePersonalBest)
+      return (
+        <TimeTrialGame
+          generation="all"
+          includeVariants={false}
+          personalBest={personalBest}
+          onFinish={(result) =>
+            setPersonalBest({ rank: result.rank, elapsedMs: result.elapsedMs, correct: result.correct })
+          }
+          onExit={vi.fn<() => void>()}
+        />
+      )
+    }
+
+    render(<ParentStub />)
+    await playThrough(user)
+
+    // An extra tick after the trial has already finished and reported, so
+    // ParentStub's setPersonalBest (triggered by onFinish) has had a chance
+    // to flow back down as a new prop and re-render TimeTrialGame before
+    // this assertion runs.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    expect(screen.getByText('New personal best!')).toBeInTheDocument()
   })
 })
