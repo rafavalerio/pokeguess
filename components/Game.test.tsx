@@ -32,12 +32,12 @@ vi.mock('next/image', async () => {
 
 // Game now opens on the main menu; every test below exercises the game
 // screen itself, so this renders and immediately clicks past the menu. The
-// button reads "Continue" instead of "Play" whenever a stored run is
+// button reads "Continue" instead of "Full Dex" whenever a stored run is
 // restored (see components/MainMenu.tsx), so this matches either.
 const renderGame = async (): Promise<UserEvent> => {
   const user = userEvent.setup()
   render(<Game />)
-  await user.click(screen.getByRole('button', { name: /^(Play|Continue)$/ }))
+  await user.click(screen.getByRole('button', { name: /^(Full Dex|Continue)$/ }))
   return user
 }
 
@@ -88,7 +88,7 @@ describe('Game', () => {
     render(<Game />)
 
     expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Dex' })).toBeInTheDocument()
     expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
   })
 
@@ -114,7 +114,7 @@ describe('Game', () => {
     expect(screen.queryByRole('heading', { name: 'Pokéguess' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Back' }))
-    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Dex' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
   })
 
@@ -126,7 +126,7 @@ describe('Game', () => {
 
     expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Full Dex' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
@@ -143,11 +143,11 @@ describe('Game', () => {
 
     // Still on the menu — the streak is gone and the generation picker is
     // back, rather than dropping straight into a fresh round.
-    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Dex' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Generation')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
   })
 
@@ -463,6 +463,33 @@ describe('Game', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByText("You caught 'em all!")).toBeInTheDocument()
   })
+
+  it('opens the Challenges screen and returns to the menu on Back', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Challenges' }))
+    expect(screen.getByRole('heading', { name: 'Challenges' })).toBeInTheDocument()
+    // Every generation row reads "Not played yet" on a fresh game (no
+    // Time Trial history in localStorage), so this asserts on the whole set
+    // rather than screen.getByText, which throws on multiple matches.
+    expect(screen.getAllByText('Not played yet').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+  })
+
+  it('opens Time Trial from the menu, showing its own heading and Home button', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Time Trial' }))
+    expect(screen.getByRole('heading', { name: 'Time Trial' })).toBeInTheDocument()
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+  })
 })
 
 describe('Generation selection', () => {
@@ -502,7 +529,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
 
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })).toBeInTheDocument()
   })
@@ -512,7 +539,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
 
     const answerButton = await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })
     expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
@@ -540,7 +567,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedGen1Id) })) // correct, streak 1
 
     expect(localStorage.getItem('bestStreak:gen1')).toBe('1')
@@ -619,7 +646,7 @@ describe('Include variants', () => {
 
     expect(screen.getByLabelText(/Include Mega Evolutions/)).not.toBeChecked()
 
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedExcludingVariants) })).toBeInTheDocument()
   })
 
@@ -628,7 +655,7 @@ describe('Include variants', () => {
     render(<Game />)
 
     await user.click(screen.getByLabelText(/Include Mega Evolutions/))
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
 
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedIncludingVariants) })).toBeInTheDocument()
   })

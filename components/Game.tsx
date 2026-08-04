@@ -3,12 +3,13 @@
 import { ArrowLeft, Home, Trophy } from 'lucide-react'
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
-import MainMenu, { type StatsRow } from './MainMenu'
+import MainMenu, { type ChallengeRow, type StatsRow } from './MainMenu'
 import PokedexShell from './PokedexShell'
 import RoundView from './RoundView'
 import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
 import ScreenHeader from './ScreenHeader'
+import TimeTrialGame from './TimeTrialGame'
 import { createInitialState, gameReducer, type Rng } from '@/lib/game'
 import {
   GENERATION_SELECT_OPTIONS,
@@ -17,19 +18,32 @@ import {
   type GenerationFilter,
 } from '@/lib/generations'
 import { getPokemonName } from '@/lib/pokemon'
+import { isBetterTimeTrialResult, type TimeTrialBest } from '@/lib/timeTrial'
+import type { TimeTrialRank } from '@/lib/gameConfig'
 
 const BEST_STREAK_KEY = 'bestStreak'
 const STREAK_KEY = 'streak'
 const USED_IDS_KEY = 'usedIds'
 const SELECTED_GENERATION_KEY = 'selectedGeneration'
 const INCLUDE_VARIANTS_KEY = 'includeVariants'
+const TIME_TRIAL_BEST_KEY = 'timeTrialBest'
+const TIME_TRIAL_ATTEMPTS_KEY = 'timeTrialAttempts'
 const rng: Rng = () => Math.random()
 
 // 'all' keeps the pre-existing plain 'bestStreak' key so upgrading doesn't
 // lose anyone's saved progress; every other generation gets its own key so
-// each has an independent best streak.
+// each has an independent best streak. timeTrialBest/timeTrialAttempts follow
+// the exact same convention, kept per generation only (not per
+// includeVariants) — see lib/generations.ts's pokemonPoolFor and the
+// bestStreak precedent this mirrors.
 const bestStreakKey = (generation: GenerationFilter): string =>
   generation === 'all' ? BEST_STREAK_KEY : `${BEST_STREAK_KEY}:gen${generation}`
+
+const timeTrialBestKey = (generation: GenerationFilter): string =>
+  generation === 'all' ? TIME_TRIAL_BEST_KEY : `${TIME_TRIAL_BEST_KEY}:gen${generation}`
+
+const timeTrialAttemptsKey = (generation: GenerationFilter): string =>
+  generation === 'all' ? TIME_TRIAL_ATTEMPTS_KEY : `${TIME_TRIAL_ATTEMPTS_KEY}:gen${generation}`
 
 // Shared by the game screen's header subtitle and RunRecap's missedGuess
 // prop, so the two never describe the active run's pool differently.
@@ -58,17 +72,19 @@ const useMounted = () => useSyncExternalStore(emptySubscribe, () => true, () => 
 const Game = () => {
   const [state, dispatch] = useReducer(gameReducer, rng, createInitialState)
   const mounted = useMounted()
-  // Navigation between the main menu, its stats view, and the game itself.
-  // Deliberately plain state rather than part of GameState: it's screen
-  // routing, not round logic, and 'menu' on both server and client renders
-  // the same way, so it carries none of the hydration risk state.pokemonId
-  // and state.options do.
-  const [view, setView] = useState<'menu' | 'stats' | 'game'>('menu')
+  // Navigation between the main menu, its stats/challenges views, Full Dex
+  // Play, and Time Trial. Deliberately plain state rather than part of
+  // GameState: it's screen routing, not round logic, and 'menu' on both
+  // server and client renders the same way, so it carries none of the
+  // hydration risk state.pokemonId and state.options do.
+  const [view, setView] = useState<'menu' | 'stats' | 'game' | 'timeTrial' | 'challenges'>('menu')
   // The menu's generation picker. Plain state like `view`, not part of
   // GameState: it's the pre-game pick, only "committed" into the reducer (via
-  // SET_GENERATION) when a fresh run actually starts — see startWithGeneration
-  // below. Defaults to 'all' on both server and client, so it carries none of
-  // the hydration risk state.pokemonId/state.options do.
+  // SET_GENERATION) when a fresh Full Dex run actually starts — see
+  // startRun below. Time Trial reads it directly as a prop instead, since a
+  // trial never touches the Full Dex reducer at all. Defaults to 'all' on
+  // both server and client, so it carries none of the hydration risk
+  // state.pokemonId/state.options do.
   const [selectedGeneration, setSelectedGeneration] = useState<GenerationFilter>('all')
   // Whether Mega/regional/Gigantamax forms are in the draw pool, alongside
   // `selectedGeneration` — same "pre-game pick" pattern, same default-false
@@ -80,6 +96,12 @@ const Game = () => {
   // the stats screen. Keyed by String(GenerationFilter) since object keys are
   // always strings.
   const [allBestStreaks, setAllBestStreaks] = useState<Record<string, number>>({})
+  // Time Trial's personal best + attempt count per generation, read from
+  // localStorage for the Challenges screen and passed into TimeTrialGame so
+  // it can tell whether a just-finished trial set a new record.
+  const [challengesData, setChallengesData] = useState<Record<string, { best: TimeTrialBest | null; attempts: number }>>(
+    {},
+  )
 
   useEffect(() => {
     try {
@@ -125,6 +147,35 @@ const Game = () => {
     }
   }, [])
 
+  // Reads every generation's Time Trial personal best + attempt count, kept
+  // as its own effect (separate from the Full Dex hydration above) since it's
+  // an unrelated concern with its own best-effort try/catch.
+  useEffect(() => {
+    try {
+      const challenges: Record<string, { best: TimeTrialBest | null; attempts: number }> = {}
+      for (const option of GENERATION_SELECT_OPTIONS) {
+        const attemptsRaw = Number(localStorage.getItem(timeTrialAttemptsKey(option.value)))
+        const attempts = Number.isFinite(attemptsRaw) && attemptsRaw > 0 ? Math.floor(attemptsRaw) : 0
+
+        let best: TimeTrialBest | null = null
+        const storedBest: unknown = JSON.parse(localStorage.getItem(timeTrialBestKey(option.value)) ?? 'null')
+        if (
+          storedBest !== null &&
+          typeof storedBest === 'object' &&
+          'rank' in storedBest &&
+          'elapsedMs' in storedBest &&
+          'correct' in storedBest
+        ) {
+          best = storedBest as TimeTrialBest
+        }
+        challenges[String(option.value)] = { best, attempts }
+      }
+      setChallengesData(challenges)
+    } catch {
+      // See the read effect above: persistence is best-effort.
+    }
+  }, [])
+
   useEffect(() => {
     if (state.bestStreak !== null) {
       try {
@@ -146,10 +197,10 @@ const Game = () => {
   }, [state.streak, state.usedIds])
 
   // Persisted on every pick (not just when a run starts) so a refresh before
-  // clicking Play remembers it, and so HYDRATE_RUN above can tell which pool
-  // a restored run was drawn from — the dropdown is locked (see MainMenu)
-  // whenever a run is in progress, so this key always matches the active
-  // run's generation once one exists.
+  // clicking Full Dex/Time Trial remembers it, and so HYDRATE_RUN above can
+  // tell which pool a restored run was drawn from — the dropdown is locked
+  // (see MainMenu) whenever a run is in progress, so this key always matches
+  // the active run's generation once one exists.
   const handleGenerationChange = useCallback((generation: GenerationFilter) => {
     setSelectedGeneration(generation)
     try {
@@ -182,6 +233,30 @@ const Game = () => {
     [allBestStreaks],
   )
 
+  // Reported once by TimeTrialGame when a trial finishes. Compares against
+  // the stored personal best, writes if it's better, always increments the
+  // attempts counter, and updates challengesData so the Challenges screen
+  // reflects the new result immediately without a reload.
+  const handleTimeTrialFinish = useCallback(
+    (result: { generation: GenerationFilter; correct: number; elapsedMs: number; rank: TimeTrialRank }) => {
+      const key = String(result.generation)
+      const candidate: TimeTrialBest = { rank: result.rank, elapsedMs: result.elapsedMs, correct: result.correct }
+      setChallengesData((prev) => {
+        const current = prev[key] ?? { best: null, attempts: 0 }
+        const best = isBetterTimeTrialResult(candidate, current.best) ? candidate : current.best
+        const attempts = current.attempts + 1
+        try {
+          localStorage.setItem(timeTrialBestKey(result.generation), JSON.stringify(best))
+          localStorage.setItem(timeTrialAttemptsKey(result.generation), String(attempts))
+        } catch {
+          // See the read effect above: persistence is best-effort.
+        }
+        return { ...prev, [key]: { best, attempts } }
+      })
+    },
+    [],
+  )
+
   // total is the base-species pool size (includeVariants: false) regardless
   // of which pool a given run was actually played with — bestStreak is
   // tracked per generation only, not per includeVariants (see
@@ -192,6 +267,13 @@ const Game = () => {
     label: option.label,
     value: allBestStreaks[String(option.value)] ?? null,
     total: pokemonPoolFor(option.value, false).length,
+  }))
+
+  const challengesRows: ChallengeRow[] = GENERATION_SELECT_OPTIONS.map((option) => ({
+    key: String(option.value),
+    label: option.label,
+    best: challengesData[String(option.value)]?.best ?? null,
+    attempts: challengesData[String(option.value)]?.attempts ?? 0,
   }))
 
   const handleReady = useCallback(() => dispatch({ type: 'IMAGE_READY' }), [])
@@ -222,10 +304,11 @@ const Game = () => {
   // Digits 1-4 mirror clicking an option (matching the on-screen number
   // badges), Space or N mirrors the Next/Start again/Main menu button.
   // Modifier keys are left alone so this doesn't fight browser shortcuts like
-  // Cmd+1 for tab switching.
+  // Cmd+1 for tab switching. Scoped to the 'game' view only — Time Trial has
+  // its own auto-advance flow with no equivalent shortcuts.
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (view !== 'game' || event.metaKey || event.ctrlKey || event.altKey) return
 
       if (state.status === 'guessing') {
         const index = Number(event.key) - 1
@@ -254,98 +337,115 @@ const Game = () => {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [state.status, state.options, state.guess, state.pokemonId])
+  }, [view, state.status, state.options, state.guess, state.pokemonId])
 
-  if (view !== 'game') {
+  if (view === 'game') {
     return (
-      <PokedexShell
-        cornerAction={
-          view === 'stats' ? { icon: ArrowLeft, label: 'Back', onClick: () => setView('menu') } : undefined
-        }
-      >
-        <MainMenu
-          mode={view}
-          statsRows={statsRows}
-          canContinue={state.streak > 0}
-          streak={state.streak}
+      <PokedexShell cornerAction={{ icon: Home, label: 'Home', onClick: () => setView('menu') }}>
+        {/* The title only appears on the main menu; this is the game screen's
+            own heading, with the active run's generation as its subtitle —
+            same ScreenHeader used everywhere else, so the two never drift into
+            different typography. */}
+        <div className="mb-3">
+          <ScreenHeader title="Who's that Pokémon?" subtitle={generationLabelFor(state.generation)} size="small" />
+        </div>
+
+        {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
+            already reads 0 by this point (GUESS zeroes it immediately), and
+            RunRecap shows both numbers itself — showing both would read as a
+            contradiction. Also hidden on the win screen, which shows its own
+            "Final streak" — repeating Streak/Best right above it would be the
+            same numbers twice on one screen. */}
+        {!missedGuess && !won && (
+          <div className="mb-4">
+            <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
+          </div>
+        )}
+
+        {won ? (
+          <WinScreen streak={state.streak} />
+        ) : missedGuess ? (
+          <RunRecap {...missedGuess} />
+        ) : (
+          <RoundView
+            mounted={mounted}
+            pokemonId={state.pokemonId}
+            roundId={state.roundId}
+            status={state.status}
+            options={state.options}
+            guess={state.guess}
+            onReady={handleReady}
+            onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
+          />
+        )}
+
+        <button
+          type="button"
+          onClick={() => (won ? setView('menu') : dispatch({ type: 'NEXT', rng }))}
+          disabled={!canAdvance}
+          className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
+        >
+          {/* The Space-bar hint mirrors the guess grid's number badges: same
+              bordered box, same "only visible while the shortcut works" rule
+              (revealed or won, sm and up), just with an underscore standing in
+              for the spacebar. */}
+          {canAdvance && (
+            <span
+              aria-hidden="true"
+              className="text-button/40 hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex"
+            >
+              _
+            </span>
+          )}
+          {won ? 'Main menu' : missedGuess ? 'Start again' : 'Next'}
+        </button>
+      </PokedexShell>
+    )
+  }
+
+  if (view === 'timeTrial') {
+    return (
+      <PokedexShell cornerAction={{ icon: Home, label: 'Home', onClick: () => setView('menu') }}>
+        <div className="mb-3">
+          <ScreenHeader title="Time Trial" subtitle={generationLabelFor(selectedGeneration)} size="small" />
+        </div>
+        <TimeTrialGame
           generation={selectedGeneration}
-          generationOptions={GENERATION_SELECT_OPTIONS}
-          onGenerationChange={handleGenerationChange}
           includeVariants={includeVariants}
-          onIncludeVariantsChange={handleIncludeVariantsChange}
-          onPlay={() => {
-            if (state.streak > 0) {
-              setView('game')
-              return
-            }
-            startRun(selectedGeneration, includeVariants)
-          }}
-          onStartAgain={() => dispatch({ type: 'RESTART', rng })}
-          onShowStats={() => setView('stats')}
+          personalBest={challengesData[String(selectedGeneration)]?.best ?? null}
+          onFinish={handleTimeTrialFinish}
+          onExit={() => setView('menu')}
         />
       </PokedexShell>
     )
   }
 
   return (
-    <PokedexShell cornerAction={{ icon: Home, label: 'Home', onClick: () => setView('menu') }}>
-      {/* The title only appears on the main menu; this is the game screen's
-          own heading, with the active run's generation as its subtitle —
-          same ScreenHeader used everywhere else, so the two never drift into
-          different typography. */}
-      <div className="mb-3">
-        <ScreenHeader title="Who's that Pokémon?" subtitle={generationLabelFor(state.generation)} size="small" />
-      </div>
-
-      {/* Hidden once a run ends on a wrong guess: ScoreBoard's live "Streak"
-          already reads 0 by this point (GUESS zeroes it immediately), and
-          RunRecap shows both numbers itself — showing both would read as a
-          contradiction. Also hidden on the win screen, which shows its own
-          "Final streak" — repeating Streak/Best right above it would be the
-          same numbers twice on one screen. */}
-      {!missedGuess && !won && (
-        <div className="mb-4">
-          <ScoreBoard streak={state.streak} bestStreak={state.bestStreak} />
-        </div>
-      )}
-
-      {won ? (
-        <WinScreen streak={state.streak} />
-      ) : missedGuess ? (
-        <RunRecap {...missedGuess} />
-      ) : (
-        <RoundView
-          mounted={mounted}
-          pokemonId={state.pokemonId}
-          roundId={state.roundId}
-          status={state.status}
-          options={state.options}
-          guess={state.guess}
-          onReady={handleReady}
-          onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
-        />
-      )}
-
-      <button
-        type="button"
-        onClick={() => (won ? setView('menu') : dispatch({ type: 'NEXT', rng }))}
-        disabled={!canAdvance}
-        className="bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark mt-4 flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99] disabled:cursor-default disabled:opacity-40"
-      >
-        {/* The Space-bar hint mirrors the guess grid's number badges: same
-            bordered box, same "only visible while the shortcut works" rule
-            (revealed or won, sm and up), just with an underscore standing in
-            for the spacebar. */}
-        {canAdvance && (
-          <span
-            aria-hidden="true"
-            className="text-button/40 hidden size-5 shrink-0 items-center justify-center rounded border border-current/40 text-xs font-semibold sm:flex"
-          >
-            _
-          </span>
-        )}
-        {won ? 'Main menu' : missedGuess ? 'Start again' : 'Next'}
-      </button>
+    <PokedexShell
+      cornerAction={
+        view === 'stats' || view === 'challenges'
+          ? { icon: ArrowLeft, label: 'Back', onClick: () => setView('menu') }
+          : undefined
+      }
+    >
+      <MainMenu
+        mode={view}
+        statsRows={statsRows}
+        challengesRows={challengesRows}
+        canContinue={state.streak > 0}
+        streak={state.streak}
+        generation={selectedGeneration}
+        generationOptions={GENERATION_SELECT_OPTIONS}
+        onGenerationChange={handleGenerationChange}
+        includeVariants={includeVariants}
+        onIncludeVariantsChange={handleIncludeVariantsChange}
+        onPlayFullDex={() => startRun(selectedGeneration, includeVariants)}
+        onPlayTimeTrial={() => setView('timeTrial')}
+        onContinue={() => setView('game')}
+        onStartAgain={() => dispatch({ type: 'RESTART', rng })}
+        onShowStats={() => setView('stats')}
+        onShowChallenges={() => setView('challenges')}
+      />
     </PokedexShell>
   )
 }
