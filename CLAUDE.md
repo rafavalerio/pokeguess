@@ -37,12 +37,18 @@ the random number generator passed in as an `Rng` argument rather than calling
 a seeded or scripted `rng`. Keep it that way; do not import `Math.random` into
 `lib/`.
 
-**`components/Game.tsx` is the only stateful component.** It owns the reducer
-and composes the presentational components (`GuessGrid`, `GuessButton`,
-`PokemonSilhouette`, `RunRecap`, `ScoreBoard`, `PokedexShell`, `MainMenu`,
-`ScreenHeader`) around it. Those components hold no game state of their own —
-if you find yourself adding `useState` to one of them, the state probably
-belongs in the reducer.
+**`components/Game.tsx` and `components/TimeTrialGame.tsx` are the two
+stateful components.** `Game.tsx` owns the Full Dex reducer and composes the
+presentational components (`RoundView`, `RunRecap`, `ScoreBoard`,
+`PokedexShell`, `MainMenu`, `ScreenHeader`) around it. `TimeTrialGame.tsx`
+owns a separate reducer (`lib/timeTrial.ts`) for the Time Trial mode — its
+state shape and lifecycle (a fixed 10-round trial with its own preload/
+timer/auto-advance effects) are different enough from `GameState` that
+folding them into one reducer would mean branching most of its cases on
+which mode is active. `RoundView` (the silhouette + revealed name + guess
+grid trio) is shared between the two. Every other component holds no state
+of its own — if you find yourself adding `useState` to one of them, the
+state probably belongs in one of the two reducers.
 
 **`ScreenHeader`** is the one title/subtitle component, used everywhere the
 app shows a heading so the three screens can't drift into different
@@ -229,6 +235,52 @@ bottom of the game screen already reads "Start again" and dispatches `NEXT`
 in this state (which behaves like `RESTART` once `streak` is already `0` —
 see the `NEXT` case in `lib/game.ts`), so the recap doesn't duplicate it.
 
+### Time Trial
+
+A second game mode, alongside the endless-streak "Full Dex Play" the rest of
+this document describes: a fixed `TIME_TRIAL_ROUND_COUNT` (10) rounds against
+the clock, scored into an S/A/B/C/D rank.
+
+`lib/timeTrial.ts` mirrors `lib/game.ts`'s shape — a pure reducer plus
+helpers, with `Rng` *and* timestamps passed in explicitly (never
+`Math.random`/`Date.now` called internally) so trials stay deterministically
+testable. `TimeTrialState.rounds` — all 10 `{ pokemonId, options }` pairs — is
+drawn once at `START`, not one round at a time; `ADVANCE` is pure index
+bookkeeping into that precomputed array.
+
+Before round 1, `TimeTrialGame` preloads every answer sprite (`new Image()`,
+warming the browser cache — distractor options only ever render as text, so
+nothing else needs preloading) behind a `'preparing'` status. This is what
+keeps round-to-round timing fair: without it, whoever has the faster
+connection would get a better time for reasons that have nothing to do with
+recognizing the silhouette faster. `TimeTrialState.startedAt` is set only once
+preloading resolves (or a `TIME_TRIAL_PRELOAD_FALLBACK_MS` fallback timeout
+fires) and round 1 is actually presented — the preload wait itself is never
+counted. `finishedAt` is set the instant round 10's `GUESS` is dispatched, not
+after that round's reveal pause, so the auto-advance delay never counts either.
+
+Every guess — right or wrong — reveals and then auto-advances after a fixed
+`TIME_TRIAL_REVEAL_MS` pause, with no button press: unlike Full Dex Play, a
+wrong guess doesn't end the trial early, so momentum shouldn't stop on a
+correct guess either.
+
+`rankTimeTrial` (`lib/gameConfig.ts`) computes the rank from mistake count and
+elapsed time: mistake count gates the tier (a single miss can never be
+outrun into an S or A no matter how fast the rest of the trial was), and
+elapsed time only ever breaks the S/A tie within an otherwise-flawless run.
+`TIME_TRIAL_HARD_DISTRACTORS` is fixed (currently 0) rather than scaling with
+progress the way `DIFFICULTY_CURVE` does for Full Dex Play — see
+`generateOptionsWithHardTarget` in `lib/game.ts`, which `generateOptions`
+itself is now a thin wrapper around, for the seam that makes this possible
+without coupling Time Trial's difficulty to the streak curve.
+
+Time Trial has no in-progress persistence: leaving mid-trial (the Home button)
+simply discards it, matching how short a trial is (10 rounds, well under a
+minute). A finished trial's result is reported once via `onFinish`, which
+`Game.tsx` compares against the stored personal best (`isBetterTimeTrialResult`
+— rank first, elapsed time as the tiebreaker within the same rank) before
+writing.
+
 ### Generation selection
 
 **`lib/generations.ts`** defines `GENERATIONS` (national dex ranges, for
@@ -274,6 +326,15 @@ and `includeVariants` are restored from the `selectedGeneration` and
 these same keys, since neither control is editable during a run (they're
 replaced by the summary instead), guaranteeing they never diverge from the
 active run's actual settings.
+
+Time Trial personal bests follow the exact same per-generation convention —
+`timeTrialBest`/`timeTrialBest:gen<N>` (a JSON `{ rank, elapsedMs, correct }`)
+and `timeTrialAttempts`/`timeTrialAttempts:gen<N>` (a plain integer,
+incremented once per *completed* trial only) — not split by `includeVariants`
+either. `Game.tsx` reads both into `challengesData` on mount, the same way it
+reads `allBestStreaks`, and the Challenges screen (`MainMenu`'s `'challenges'`
+mode) renders one row per generation from it, parallel to how `'stats'` mode
+renders `statsRows`.
 
 ### Hiding the answer
 
