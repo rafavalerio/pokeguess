@@ -6,6 +6,7 @@ import {
   createInitialState,
   gameReducer,
   generateOptions,
+  generateOptionsWithHardTarget,
   isHardDistractor,
   randomPokemon,
   randomPokemonExcluding,
@@ -205,6 +206,41 @@ describe('generateOptions scales hard distractors with streak', () => {
     for (let seed = 0; seed < 20; seed += 1) {
       const options = generateOptions(kakunaId, 8, makeRng([seed / 20, 0.11, 0.22, 0.33, 0.44]))
       expect(hardCountIn(options)).toBeGreaterThanOrEqual(2)
+    }
+  })
+})
+
+describe('generateOptionsWithHardTarget', () => {
+  it('matches generateOptions at streak 0 (hardTarget 0)', () => {
+    const rngValues = [0.1, 0.2, 0.3]
+    expect(generateOptionsWithHardTarget(42, 0, makeRng(rngValues))).toEqual(
+      generateOptions(42, 0, makeRng(rngValues)),
+    )
+  })
+
+  it('accepts an explicit hard-distractor target, independent of any streak band', () => {
+    const kakunaId = 14 // dex 14; Butterfree(12)/Weedle(13)/Beedrill(15)/Pidgey(16) are all dex-adjacent hard candidates
+    const kakuna = pokemonList.find((entry) => entry.id === kakunaId)!
+    const hardCountIn = (options: number[]) =>
+      options.filter(
+        (id) => id !== kakunaId && isHardDistractor(kakuna, pokemonList.find((entry) => entry.id === id)!),
+      ).length
+
+    for (let seed = 0; seed < 20; seed += 1) {
+      // hardTarget 2 passed directly — no streak value maps to this in
+      // DIFFICULTY_CURVE's band 1 (which yields 1), proving the target isn't
+      // being derived from a streak internally.
+      const options = generateOptionsWithHardTarget(kakunaId, 2, makeRng([seed / 20, 0.11, 0.22, 0.33, 0.44]))
+      expect(hardCountIn(options)).toBeGreaterThanOrEqual(2)
+    }
+  })
+
+  it('returns exactly four unique options that always include the answer', () => {
+    for (let seed = 0; seed < 20; seed += 1) {
+      const options = generateOptionsWithHardTarget(42, 1, makeRng([seed / 20, 0.11, 0.22, 0.33]))
+      expect(options).toHaveLength(4)
+      expect(new Set(options).size).toBe(4)
+      expect(options).toContain(42)
     }
   })
 })

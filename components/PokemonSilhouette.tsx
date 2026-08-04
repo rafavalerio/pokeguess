@@ -66,6 +66,14 @@ const PokemonSilhouette = ({ pokemonId, roundId, status, onReady }: Props) => {
         width={192}
         height={192}
         priority
+        // Time Trial (components/TimeTrialGame.tsx) preloads every round's
+        // sprite via `new window.Image()` against this exact getSpriteUrl
+        // CDN URL. Without `unoptimized`, next/image's default loader would
+        // request `/_next/image?url=...` instead — a different URL entirely
+        // — so the preload would warm a cache entry the browser never
+        // actually requests. `unoptimized` makes the real request match what
+        // was preloaded.
+        unoptimized
         draggable={false}
         onLoad={onReady}
         onError={onReady}

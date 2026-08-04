@@ -37,27 +37,39 @@ the random number generator passed in as an `Rng` argument rather than calling
 a seeded or scripted `rng`. Keep it that way; do not import `Math.random` into
 `lib/`.
 
-**`components/Game.tsx` is the only stateful component.** It owns the reducer
-and composes the presentational components (`GuessGrid`, `GuessButton`,
-`PokemonSilhouette`, `RunRecap`, `ScoreBoard`, `PokedexShell`, `MainMenu`,
-`ScreenHeader`) around it. Those components hold no game state of their own —
-if you find yourself adding `useState` to one of them, the state probably
-belongs in the reducer.
+**`components/Game.tsx` and `components/TimeTrialGame.tsx` are the two
+stateful components.** `Game.tsx` owns the Full Dex reducer and composes the
+presentational components (`RoundView`, `RunRecap`, `ScoreBoard`,
+`PokedexShell`, `MainMenu`, `ScreenHeader`) around it. `TimeTrialGame.tsx`
+owns a separate reducer (`lib/timeTrial.ts`) for the Time Trial mode — its
+state shape and lifecycle (a fixed 10-round trial with its own preload/
+timer/auto-advance effects) are different enough from `GameState` that
+folding them into one reducer would mean branching most of its cases on
+which mode is active. `RoundView` (the silhouette + revealed name + guess
+grid trio) is shared between the two. Every other component holds no state
+of its own — if you find yourself adding `useState` to one of them, the
+state probably belongs in one of the two reducers.
 
 **`ScreenHeader`** is the one title/subtitle component, used everywhere the
-app shows a heading so the three screens can't drift into different
-typography: the menu (`size="large"`, an `h1` — "Pokéguess" over "Who's that
-Pokémon?"), the stats screen (`size="small"`, an `h2`, "Stats", no subtitle),
-and the game screen (`size="small"`, "Who's that Pokémon?" over the active
-run's generation label — see below). There is exactly one `h1` per screen
-(the menu's); everything else is an `h2`, `size="small"`.
+app shows a heading so no screen can drift into different typography: the
+menu (`size="large"`, an `h1` — "Pokéguess" over "Who's that Pokémon?"), the
+stats screen (`size="small"`, an `h2`, "Stats", no subtitle), the Challenges
+screen (`size="small"`, an `h2`, "Challenges", no subtitle — same `MainMenu`
+component as stats, just a different `mode`), the game screen (`size="small"`,
+"Who's that Pokémon?" over the active run's generation label — see below),
+and the Time Trial screen (`size="small"`, "Time Trial" over that same
+generation label, set from `Game.tsx`'s `view === 'timeTrial'` branch). There
+is exactly one `h1` per screen (the menu's); everything else is an `h2`,
+`size="small"`.
 
 Game.tsx also owns plain (non-reducer) state: `view` (`'menu' | 'stats' |
-'game'`), which screen is showing, and `selectedGeneration`/`includeVariants`
-(see "Generation selection" below), the menu's pool pickers. `view` starts on
-`'menu'` — a main menu / hub with the title, a Play button, and a Stats
-button — and switches to `'game'` to show the existing single-round UI
-unchanged. All three deliberately sit outside `GameState`: they're
+'game' | 'timeTrial' | 'challenges'`), which screen is showing, and
+`selectedGeneration`/`includeVariants` (see "Generation selection" below),
+the menu's pool pickers. `view` starts on `'menu'` — a main menu / hub with
+the title, Full Dex and Time Trial buttons (the two modes a fresh player can
+start), and Stats and Challenges buttons (each mode's own best-record
+screen) — and switches to `'game'` or `'timeTrial'` to show that mode's UI.
+All three deliberately sit outside `GameState`: they're
 pre-game/screen state, not round logic, and all default identically on server
 and client (`'menu'`, `'all'`, `false`), so none carries the hydration risk
 `pokemonId`/`options` do. The `Pokéguess` title only renders on `MainMenu`
@@ -74,9 +86,16 @@ in-progress run keeps its `pokemonId`/`options`/`status` in memory — the same
 round is still there if the player returns via Continue. Once a run is in
 progress (`streak > 0`), the menu swaps its generation `<select>`/checkbox for
 a "current run" summary (generation, includeVariants, streak — all read
-straight off `GameState`/component state, not re-derived) and its single Play
-button for Continue (same handler as Play — the reducer already holds the
-right state either way) and Start again. Unlike Continue, Start again
+straight off `GameState`/component state, not re-derived) and its Full
+Dex/Time Trial buttons for Continue and Start again — Time Trial has no
+equivalent "current run" to resume, so it's simply unavailable until the Full
+Dex run in progress ends or is reset (see `MainMenu`'s `canContinue` prop).
+Continue and Full Dex are deliberately separate handlers, not the same one:
+`onContinue` is just `setView('game')`, since the reducer already holds the
+in-progress run's state and nothing needs to change to show it, while
+`onPlayFullDex` calls `startRun`, which dispatches `SET_GENERATION` — a full
+reset — because Full Dex is only reachable here when there's no run to
+resume. Start again also
 dispatches `RESTART` (a full reset, the same shape `NEXT` produces from the
 win screen or a broken streak) but deliberately does *not* switch `view` to
 `'game'` — it resets the streak and stays on the menu, so `canContinue` goes
@@ -84,14 +103,17 @@ back to `false` and the picker reappears immediately for a fresh pick, rather
 than forcing a detour through the game screen and back via Home.
 
 **`PokedexShell`'s top-right corner holds one `cornerAction`** (`{ icon,
-label, onClick }`), not separate `onHome`/`onBack` props — Home (game screen)
-and Back (stats screen) are never both relevant at once, so `Game.tsx` picks
-whichever fits the current `view` and the button markup/styling is defined
-exactly once. The stats screen (`mode === 'stats'` in `MainMenu`) also swaps
-the title/subtitle block for a plain "Stats" heading sitting close to the top
-(`pt-1` instead of the menu's `py-10`) instead of inheriting the menu's
-centered layout, and no longer renders its own bottom Back button — that
-moved into `cornerAction`.
+label, onClick }`), not separate `onHome`/`onBack` props — Home and Back are
+never both relevant at once, so `Game.tsx` picks whichever fits the current
+`view` and the button markup/styling is defined exactly once: Home for
+`'game'` and `'timeTrial'` (both return to the menu without resetting
+anything — Time Trial has no persisted "current run" to preserve, but the
+label and behavior are the same), Back for `'stats'` and `'challenges'`. The
+stats and Challenges screens (`mode === 'stats' | 'challenges'` in
+`MainMenu`) also swap the title/subtitle block for a plain "Stats"/
+"Challenges" heading sitting close to the top (`pt-1` instead of the menu's
+`py-10`) instead of inheriting the menu's centered layout, and neither
+renders its own bottom Back button — that moved into `cornerAction`.
 
 **`lib/pokemonData.ts`** is a generated file (via `npm run pokemon:build`,
 `scripts/build-pokemon-data.mjs`) listing every base species (dex 1–1025) plus
@@ -229,6 +251,52 @@ bottom of the game screen already reads "Start again" and dispatches `NEXT`
 in this state (which behaves like `RESTART` once `streak` is already `0` —
 see the `NEXT` case in `lib/game.ts`), so the recap doesn't duplicate it.
 
+### Time Trial
+
+A second game mode, alongside the endless-streak "Full Dex Play" the rest of
+this document describes: a fixed `TIME_TRIAL_ROUND_COUNT` (10) rounds against
+the clock, scored into an S/A/B/C/D rank.
+
+`lib/timeTrial.ts` mirrors `lib/game.ts`'s shape — a pure reducer plus
+helpers, with `Rng` *and* timestamps passed in explicitly (never
+`Math.random`/`Date.now` called internally) so trials stay deterministically
+testable. `TimeTrialState.rounds` — all 10 `{ pokemonId, options }` pairs — is
+drawn once at `START`, not one round at a time; `ADVANCE` is pure index
+bookkeeping into that precomputed array.
+
+Before round 1, `TimeTrialGame` preloads every answer sprite (`new Image()`,
+warming the browser cache — distractor options only ever render as text, so
+nothing else needs preloading) behind a `'preparing'` status. This is what
+keeps round-to-round timing fair: without it, whoever has the faster
+connection would get a better time for reasons that have nothing to do with
+recognizing the silhouette faster. `TimeTrialState.startedAt` is set only once
+preloading resolves (or a `TIME_TRIAL_PRELOAD_FALLBACK_MS` fallback timeout
+fires) and round 1 is actually presented — the preload wait itself is never
+counted. `finishedAt` is set the instant round 10's `GUESS` is dispatched, not
+after that round's reveal pause, so the auto-advance delay never counts either.
+
+Every guess — right or wrong — reveals and then auto-advances after a fixed
+`TIME_TRIAL_REVEAL_MS` pause, with no button press: unlike Full Dex Play, a
+wrong guess doesn't end the trial early, so momentum shouldn't stop on a
+correct guess either.
+
+`rankTimeTrial` (`lib/gameConfig.ts`) computes the rank from mistake count and
+elapsed time: mistake count gates the tier (a single miss can never be
+outrun into an S or A no matter how fast the rest of the trial was), and
+elapsed time only ever breaks the S/A tie within an otherwise-flawless run.
+`TIME_TRIAL_HARD_DISTRACTORS` is fixed (currently 0) rather than scaling with
+progress the way `DIFFICULTY_CURVE` does for Full Dex Play — see
+`generateOptionsWithHardTarget` in `lib/game.ts`, which `generateOptions`
+itself is now a thin wrapper around, for the seam that makes this possible
+without coupling Time Trial's difficulty to the streak curve.
+
+Time Trial has no in-progress persistence: leaving mid-trial (the Home button)
+simply discards it, matching how short a trial is (10 rounds, well under a
+minute). A finished trial's result is reported once via `onFinish`, which
+`Game.tsx` compares against the stored personal best (`isBetterTimeTrialResult`
+— rank first, elapsed time as the tiebreaker within the same rank) before
+writing.
+
 ### Generation selection
 
 **`lib/generations.ts`** defines `GENERATIONS` (national dex ranges, for
@@ -252,8 +320,8 @@ without covering the whole national dex.
 The menu's generation `<select>` and "include variants" checkbox are both
 plain component state in `Game.tsx` (`selectedGeneration`, `includeVariants`),
 the same "pre-game pick, not round logic" pattern as `view` — they're only
-committed into the reducer, via the `SET_GENERATION` action, when Play starts
-a genuinely fresh run (`streak === 0`). `SET_GENERATION` redraws the round
+committed into the reducer, via the `SET_GENERATION` action, when Full Dex
+starts a genuinely fresh run (`streak === 0`). `SET_GENERATION` redraws the round
 from the new pool, resets the streak, and adopts a caller-supplied
 `bestStreak`, since only `Game.tsx` knows how to read the right
 per-generation localStorage key; the reducer stays free of I/O. Both controls
@@ -274,6 +342,15 @@ and `includeVariants` are restored from the `selectedGeneration` and
 these same keys, since neither control is editable during a run (they're
 replaced by the summary instead), guaranteeing they never diverge from the
 active run's actual settings.
+
+Time Trial personal bests follow the exact same per-generation convention —
+`timeTrialBest`/`timeTrialBest:gen<N>` (a JSON `{ rank, elapsedMs, correct }`)
+and `timeTrialAttempts`/`timeTrialAttempts:gen<N>` (a plain integer,
+incremented once per *completed* trial only) — not split by `includeVariants`
+either. `Game.tsx` reads both into `challengesData` on mount, the same way it
+reads `allBestStreaks`, and the Challenges screen (`MainMenu`'s `'challenges'`
+mode) renders one row per generation from it, parallel to how `'stats'` mode
+renders `statsRows`.
 
 ### Hiding the answer
 

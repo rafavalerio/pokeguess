@@ -73,19 +73,18 @@ export const isHardDistractor = (answer: PokemonEntry, candidate: PokemonEntry):
   Math.abs(answer.speciesDex - candidate.speciesDex) <= DEX_PROXIMITY ||
   spellingSimilarity(answer.name, candidate.name) >= SIMILARITY_THRESHOLD
 
-export const generateOptions = (
+export const generateOptionsWithHardTarget = (
   answerId: number,
-  streak: number,
+  hardTarget: number,
   rng: Rng,
   pool: readonly PokemonEntry[] = pokemonList,
 ): number[] => {
   const answer = getPokemonEntry(answerId)
-  const hardTarget = hardDistractorCountForStreak(streak)
   const options = new Set<number>([answerId])
 
-  // Skipped entirely at hardTarget 0 (streak 0-2) so the rng call sequence
-  // — and therefore every existing scripted-rng test — is untouched at low
-  // streaks.
+  // Skipped entirely at hardTarget 0 so the rng call sequence — and therefore
+  // every existing scripted-rng test — is untouched when no hard distractors
+  // are requested.
   if (hardTarget > 0) {
     const hardCandidates = shuffle(
       pool.filter((entry) => entry.id !== answerId && isHardDistractor(answer, entry)),
@@ -113,6 +112,13 @@ export const generateOptions = (
   }
   return shuffle([...options], rng)
 }
+
+export const generateOptions = (
+  answerId: number,
+  streak: number,
+  rng: Rng,
+  pool: readonly PokemonEntry[] = pokemonList,
+): number[] => generateOptionsWithHardTarget(answerId, hardDistractorCountForStreak(streak), rng, pool)
 
 export type Status = 'loading' | 'guessing' | 'revealed' | 'won'
 

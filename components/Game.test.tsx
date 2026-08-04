@@ -1,12 +1,14 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { UserEvent } from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import Game from './Game'
+import { TIME_TRIAL_REVEAL_MS, TIME_TRIAL_ROUND_COUNT } from '@/lib/gameConfig'
 import { pokemonPoolFor } from '@/lib/generations'
 import { getPokemonName } from '@/lib/pokemon'
 import { pokemonList } from '@/lib/pokemonData'
+import { formatElapsedMs } from '@/lib/timeTrial'
 
 // Lets a test hold the sprite in its loading state by withholding the load
 // event, which is otherwise fired immediately on mount.
@@ -32,12 +34,12 @@ vi.mock('next/image', async () => {
 
 // Game now opens on the main menu; every test below exercises the game
 // screen itself, so this renders and immediately clicks past the menu. The
-// button reads "Continue" instead of "Play" whenever a stored run is
+// button reads "Continue" instead of "Full Dex" whenever a stored run is
 // restored (see components/MainMenu.tsx), so this matches either.
 const renderGame = async (): Promise<UserEvent> => {
   const user = userEvent.setup()
   render(<Game />)
-  await user.click(screen.getByRole('button', { name: /^(Play|Continue)$/ }))
+  await user.click(screen.getByRole('button', { name: /^(Full Dex|Continue)$/ }))
   return user
 }
 
@@ -88,7 +90,7 @@ describe('Game', () => {
     render(<Game />)
 
     expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Dex' })).toBeInTheDocument()
     expect(screen.queryByTestId('stat-streak')).not.toBeInTheDocument()
   })
 
@@ -114,7 +116,7 @@ describe('Game', () => {
     expect(screen.queryByRole('heading', { name: 'Pokéguess' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Back' }))
-    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Dex' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
   })
 
@@ -126,7 +128,7 @@ describe('Game', () => {
 
     expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Play' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Full Dex' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('1')
@@ -143,11 +145,11 @@ describe('Game', () => {
 
     // Still on the menu — the streak is gone and the generation picker is
     // back, rather than dropping straight into a fresh round.
-    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Full Dex' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Generation')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
     expect(screen.getByTestId('stat-streak')).toHaveTextContent('0')
   })
 
@@ -463,6 +465,33 @@ describe('Game', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
     expect(screen.getByText("You caught 'em all!")).toBeInTheDocument()
   })
+
+  it('opens the Challenges screen and returns to the menu on Back', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Challenges' }))
+    expect(screen.getByRole('heading', { name: 'Challenges' })).toBeInTheDocument()
+    // Every generation row reads "Not played yet" on a fresh game (no
+    // Time Trial history in localStorage), so this asserts on the whole set
+    // rather than screen.getByText, which throws on multiple matches.
+    expect(screen.getAllByText('Not played yet').length).toBeGreaterThan(0)
+
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+  })
+
+  it('opens Time Trial from the menu, showing its own heading and Home button', async () => {
+    const user = userEvent.setup()
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Time Trial' }))
+    expect(screen.getByRole('heading', { name: 'Time Trial' })).toBeInTheDocument()
+    expect(screen.getByText('All generations')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Home' }))
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+  })
 })
 
 describe('Generation selection', () => {
@@ -502,7 +531,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
 
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })).toBeInTheDocument()
   })
@@ -512,7 +541,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
 
     const answerButton = await screen.findByRole('button', { name: getPokemonName(pinnedGen1Id) })
     expect(screen.getByText('Generation 1 · Kanto')).toBeInTheDocument()
@@ -540,7 +569,7 @@ describe('Generation selection', () => {
     render(<Game />)
 
     await user.selectOptions(screen.getByLabelText('Generation'), 'Generation 1 · Kanto')
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
     await user.click(screen.getByRole('button', { name: getPokemonName(pinnedGen1Id) })) // correct, streak 1
 
     expect(localStorage.getItem('bestStreak:gen1')).toBe('1')
@@ -619,7 +648,7 @@ describe('Include variants', () => {
 
     expect(screen.getByLabelText(/Include Mega Evolutions/)).not.toBeChecked()
 
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedExcludingVariants) })).toBeInTheDocument()
   })
 
@@ -628,7 +657,7 @@ describe('Include variants', () => {
     render(<Game />)
 
     await user.click(screen.getByLabelText(/Include Mega Evolutions/))
-    await user.click(screen.getByRole('button', { name: 'Play' }))
+    await user.click(screen.getByRole('button', { name: 'Full Dex' }))
 
     expect(await screen.findByRole('button', { name: getPokemonName(pinnedIncludingVariants) })).toBeInTheDocument()
   })
@@ -663,5 +692,95 @@ describe('Include variants', () => {
 
     await screen.findByRole('button', { name: 'Continue' })
     expect(screen.getByText(/Includes Mega, regional & Gigantamax forms/)).toBeInTheDocument()
+  })
+})
+
+// Resolves on the next microtask, mimicking a cache-warm image load — same
+// shape as components/TimeTrialGame.test.tsx's MockPreloadImage, needed here
+// because TimeTrialGame's preload effect calls `new window.Image()` directly
+// rather than going through next/image (which is mocked above).
+class MockPreloadImage {
+  onload: (() => void) | null = null
+  onerror: (() => void) | null = null
+  set src(_value: string) {
+    Promise.resolve().then(() => this.onload?.())
+  }
+}
+
+// Clicks the first rendered guess option every round and lets the
+// auto-advance timer fire, mirroring TimeTrialGame.test.tsx's playThrough
+// helper. Ground truth (right or wrong) doesn't matter for what the "Time
+// Trial persistence" tests below assert — only that a full trial completes
+// and reports exactly once — so unlike that helper this doesn't need to read
+// round-answer to tally a correct count.
+const playTimeTrialThrough = async (user: UserEvent): Promise<void> => {
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0) // let the preload microtasks settle
+  })
+
+  for (let round = 1; round <= TIME_TRIAL_ROUND_COUNT; round += 1) {
+    expect(screen.getByText(`Round ${round}/${TIME_TRIAL_ROUND_COUNT}`)).toBeInTheDocument()
+    const guessButtons = screen.getAllByRole('button').filter((b) => b.getAttribute('aria-label') !== 'Home')
+    await user.click(guessButtons[0])
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(TIME_TRIAL_REVEAL_MS)
+    })
+  }
+}
+
+// Exercises handleTimeTrialFinish (components/Game.tsx) end to end: the
+// localStorage write-then-read round trip for a completed Time Trial had
+// zero coverage before this — components/TimeTrialGame.test.tsx only
+// asserts the shape of the payload passed to onFinish, never what the
+// parent actually does with it, which is exactly how the "New personal
+// best!" banner bug (isNewBest recomputed from a personalBest prop that had
+// already been overwritten with the just-finished result) shipped unnoticed.
+describe('Time Trial persistence', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    vi.stubGlobal('Image', MockPreloadImage)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('persists a finished trial to localStorage and reflects it on the Challenges screen', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    render(<Game />)
+
+    await user.click(screen.getByRole('button', { name: 'Time Trial' }))
+    await playTimeTrialThrough(user)
+
+    // The results screen only renders once the trial has actually reached
+    // 'finished', so this also confirms all 10 rounds went through.
+    expect(await screen.findByRole('button', { name: 'Retry' })).toBeInTheDocument()
+
+    const storedBest: unknown = JSON.parse(localStorage.getItem('timeTrialBest') ?? 'null')
+    expect(storedBest).toMatchObject({
+      rank: expect.any(String),
+      elapsedMs: expect.any(Number),
+      correct: expect.any(Number),
+    })
+    expect(localStorage.getItem('timeTrialAttempts')).toBe('1')
+
+    await user.click(screen.getByRole('button', { name: 'Main menu' }))
+    expect(screen.getByRole('heading', { name: 'Pokéguess' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Challenges' }))
+
+    // Scoped to the "All generations" row specifically, since every other
+    // generation's row still legitimately reads "Not played yet" — this run
+    // was unscoped (the default 'all' generation), so only that row should
+    // have changed.
+    const allGenerationsRow = screen.getByText('All generations').closest('div')!.parentElement!
+    expect(within(allGenerationsRow).queryByText('Not played yet')).not.toBeInTheDocument()
+    expect(within(allGenerationsRow).getByText('Played 1 time')).toBeInTheDocument()
+    const best = storedBest as { rank: string; elapsedMs: number }
+    expect(within(allGenerationsRow).getByText(best.rank)).toBeInTheDocument()
+    expect(within(allGenerationsRow).getByText(formatElapsedMs(best.elapsedMs))).toBeInTheDocument()
   })
 })

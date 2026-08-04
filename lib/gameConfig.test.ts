@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { DIFFICULTY_CURVE, hardDistractorCountForStreak } from './gameConfig'
+import {
+  DIFFICULTY_CURVE,
+  TIME_TRIAL_ROUND_COUNT,
+  TIME_TRIAL_S_RANK_MAX_SECONDS,
+  hardDistractorCountForStreak,
+  rankTimeTrial,
+} from './gameConfig'
 
 describe('hardDistractorCountForStreak', () => {
   it('returns 0 below the first non-zero band', () => {
@@ -27,5 +33,33 @@ describe('hardDistractorCountForStreak', () => {
     for (const band of DIFFICULTY_CURVE) {
       expect(hardDistractorCountForStreak(band.minStreak)).toBe(band.hardDistractors)
     }
+  })
+})
+
+describe('rankTimeTrial', () => {
+  it('ranks a flawless run under the S threshold as S', () => {
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT, (TIME_TRIAL_S_RANK_MAX_SECONDS - 1) * 1000)).toBe('S')
+  })
+
+  it('ranks a flawless run exactly at the S threshold as S', () => {
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT, TIME_TRIAL_S_RANK_MAX_SECONDS * 1000)).toBe('S')
+  })
+
+  it('ranks a flawless run just over the S threshold as A', () => {
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT, TIME_TRIAL_S_RANK_MAX_SECONDS * 1000 + 1)).toBe('A')
+  })
+
+  it('ranks exactly one mistake as B regardless of time', () => {
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT - 1, 1)).toBe('B')
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT - 1, 999999)).toBe('B')
+  })
+
+  it('ranks exactly two mistakes as C', () => {
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT - 2, 1)).toBe('C')
+  })
+
+  it('ranks three or more mistakes as D', () => {
+    expect(rankTimeTrial(TIME_TRIAL_ROUND_COUNT - 3, 1)).toBe('D')
+    expect(rankTimeTrial(0, 1)).toBe('D')
   })
 })
