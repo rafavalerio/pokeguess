@@ -52,7 +52,7 @@ const ResultRow = ({
       {!correct && <p className="text-wrong-ink/80 truncate text-xs">Guessed {getPokemonName(guess)}</p>}
     </div>
     {correct ? (
-      <Check className="text-correct size-4 shrink-0" aria-hidden="true" />
+      <Check className="text-correct-ink size-4 shrink-0" aria-hidden="true" />
     ) : (
       <X className="text-wrong-ink size-4 shrink-0" aria-hidden="true" />
     )}
