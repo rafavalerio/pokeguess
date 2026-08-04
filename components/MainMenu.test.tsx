@@ -16,9 +16,15 @@ const statsRows = [
   { key: "1", label: "Generation 1 · Kanto", value: null, total: 151 },
 ];
 
+const challengesRows = [
+  { key: "all", label: "All generations", best: null, attempts: 0 },
+  { key: "1", label: "Generation 1 · Kanto", best: null, attempts: 0 },
+];
+
 const baseProps = {
   mode: "menu" as const,
   statsRows,
+  challengesRows,
   canContinue: false,
   streak: 0,
   generation: "all" as GenerationFilter,
@@ -26,20 +32,25 @@ const baseProps = {
   onGenerationChange: vi.fn<(generation: GenerationFilter) => void>(),
   includeVariants: false,
   onIncludeVariantsChange: vi.fn<(includeVariants: boolean) => void>(),
-  onPlay: vi.fn<() => void>(),
+  onPlayFullDex: vi.fn<() => void>(),
+  onPlayTimeTrial: vi.fn<() => void>(),
+  onContinue: vi.fn<() => void>(),
   onStartAgain: vi.fn<() => void>(),
   onShowStats: vi.fn<() => void>(),
+  onShowChallenges: vi.fn<() => void>(),
 };
 
 describe("MainMenu", () => {
-  it("shows the title and Play/Stats actions when no run is in progress", () => {
+  it("shows the title and Full Dex/Time Trial/Stats/Challenges actions when no run is in progress", () => {
     render(<MainMenu {...baseProps} />);
 
     expect(
       screen.getByRole("heading", { name: "Pokéguess" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Play" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Full Dex" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Time Trial" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stats" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Challenges" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Continue" }),
     ).not.toBeInTheDocument();
@@ -48,16 +59,25 @@ describe("MainMenu", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("calls onPlay when Play is clicked", async () => {
+  it("calls onPlayFullDex when Full Dex is clicked", async () => {
     const user = userEvent.setup();
-    const onPlay = vi.fn<() => void>();
-    render(<MainMenu {...baseProps} onPlay={onPlay} />);
+    const onPlayFullDex = vi.fn<() => void>();
+    render(<MainMenu {...baseProps} onPlayFullDex={onPlayFullDex} />);
 
-    await user.click(screen.getByRole("button", { name: "Play" }));
-    expect(onPlay).toHaveBeenCalledOnce();
+    await user.click(screen.getByRole("button", { name: "Full Dex" }));
+    expect(onPlayFullDex).toHaveBeenCalledOnce();
   });
 
-  it("shows Continue and Start again instead of Play when a run is in progress", () => {
+  it("calls onPlayTimeTrial when Time Trial is clicked", async () => {
+    const user = userEvent.setup();
+    const onPlayTimeTrial = vi.fn<() => void>();
+    render(<MainMenu {...baseProps} onPlayTimeTrial={onPlayTimeTrial} />);
+
+    await user.click(screen.getByRole("button", { name: "Time Trial" }));
+    expect(onPlayTimeTrial).toHaveBeenCalledOnce();
+  });
+
+  it("shows Continue and Start again instead of Full Dex/Time Trial when a run is in progress", () => {
     render(<MainMenu {...baseProps} canContinue={true} />);
 
     expect(
@@ -67,17 +87,20 @@ describe("MainMenu", () => {
       screen.getByRole("button", { name: "Start again" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Play" }),
+      screen.queryByRole("button", { name: "Full Dex" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Time Trial" }),
     ).not.toBeInTheDocument();
   });
 
-  it("calls onPlay when Continue is clicked", async () => {
+  it("calls onContinue when Continue is clicked", async () => {
     const user = userEvent.setup();
-    const onPlay = vi.fn<() => void>();
-    render(<MainMenu {...baseProps} canContinue={true} onPlay={onPlay} />);
+    const onContinue = vi.fn<() => void>();
+    render(<MainMenu {...baseProps} canContinue={true} onContinue={onContinue} />);
 
     await user.click(screen.getByRole("button", { name: "Continue" }));
-    expect(onPlay).toHaveBeenCalledOnce();
+    expect(onContinue).toHaveBeenCalledOnce();
   });
 
   it("calls onStartAgain when Start again is clicked", async () => {
@@ -250,5 +273,59 @@ describe("MainMenu", () => {
     expect(
       screen.queryByRole("button", { name: "Back" }),
     ).not.toBeInTheDocument();
+
+    render(<MainMenu {...baseProps} mode="challenges" />);
+
+    expect(
+      screen.queryByRole("button", { name: "Back" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onShowChallenges when Challenges is clicked", async () => {
+    const user = userEvent.setup();
+    const onShowChallenges = vi.fn<() => void>();
+    render(<MainMenu {...baseProps} onShowChallenges={onShowChallenges} />);
+
+    await user.click(screen.getByRole("button", { name: "Challenges" }));
+    expect(onShowChallenges).toHaveBeenCalledOnce();
+  });
+
+  it('shows a "Challenges" heading instead of the title/subtitle in challenges mode', () => {
+    render(<MainMenu {...baseProps} mode="challenges" />);
+
+    expect(
+      screen.getByRole("heading", { name: "Challenges" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Pokéguess" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows a rank, time and attempt count per generation with a personal best", () => {
+    render(
+      <MainMenu
+        {...baseProps}
+        mode="challenges"
+        challengesRows={[
+          { key: "all", label: "All generations", best: { rank: "A", elapsedMs: 42300, correct: 10 }, attempts: 5 },
+          { key: "1", label: "Generation 1 · Kanto", best: null, attempts: 0 },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("All generations")).toBeInTheDocument();
+    expect(screen.getByText("A")).toBeInTheDocument();
+    expect(screen.getByText("0:42.3")).toBeInTheDocument();
+    expect(screen.getByText("Played 5 times")).toBeInTheDocument();
+
+    expect(screen.getByText("Generation 1 · Kanto")).toBeInTheDocument();
+    expect(screen.getByText("Not played yet")).toBeInTheDocument();
+  });
+
+  it("does not render Play/Stats actions in challenges mode", () => {
+    render(<MainMenu {...baseProps} mode="challenges" />);
+
+    expect(screen.queryByRole("button", { name: "Full Dex" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stats" })).not.toBeInTheDocument();
   });
 });

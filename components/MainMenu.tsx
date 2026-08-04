@@ -1,7 +1,9 @@
-import { ChevronDown, Play, RotateCcw, Trophy } from 'lucide-react'
+import { ChevronDown, Play, RotateCcw, Swords, Timer, Trophy } from 'lucide-react'
 
+import RankBadge from './RankBadge'
 import ScreenHeader from './ScreenHeader'
 import type { GenerationFilter } from '@/lib/generations'
+import { formatElapsedMs, type TimeTrialBest } from '@/lib/timeTrial'
 
 const primaryButtonClassName =
   'bg-shell focus-visible:ring-shell enabled:hover:bg-shell-dark flex w-full select-none items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold text-button transition duration-150 focus-visible:ring-2 focus-visible:outline-none enabled:cursor-pointer enabled:active:scale-[0.99]'
@@ -22,15 +24,23 @@ const selectClassName =
 // value >= total means every Pokémon in that pool has been named.
 export type StatsRow = { key: string; label: string; value: number | null; total: number }
 
+// One row per generation (plus "All") for the Challenges screen, same shape
+// as StatsRow but tracking Time Trial's personal best and attempt count
+// instead of a streak.
+export type ChallengeRow = { key: string; label: string; best: TimeTrialBest | null; attempts: number }
+
 type GenerationOption = { value: GenerationFilter; label: string }
 
 type Props = {
-  mode: 'menu' | 'stats'
+  mode: 'menu' | 'stats' | 'challenges'
   statsRows: StatsRow[]
+  challengesRows: ChallengeRow[]
   // Whether a run is currently in progress (streak > 0), restored from
   // localStorage the same way bestStreak is — see components/Game.tsx.
   // Swaps the generation/variants picker for a "current run" summary and the
-  // single Play button for Continue + Start again.
+  // Full Dex/Time Trial buttons for Continue + Start again. Time Trial has
+  // no equivalent "current run" state to resume, so it's simply unavailable
+  // until the Full Dex run in progress ends or is reset.
   canContinue: boolean
   // The active run's streak, shown in the "current run" summary while
   // canContinue is true. Unused otherwise.
@@ -45,14 +55,18 @@ type Props = {
   // rather than being implied by the generation pick.
   includeVariants: boolean
   onIncludeVariantsChange: (includeVariants: boolean) => void
-  onPlay: () => void
+  onPlayFullDex: () => void
+  onPlayTimeTrial: () => void
+  onContinue: () => void
   onStartAgain: () => void
   onShowStats: () => void
+  onShowChallenges: () => void
 }
 
 const MainMenu = ({
   mode,
   statsRows,
+  challengesRows,
   canContinue,
   streak,
   generation,
@@ -60,9 +74,12 @@ const MainMenu = ({
   onGenerationChange,
   includeVariants,
   onIncludeVariantsChange,
-  onPlay,
+  onPlayFullDex,
+  onPlayTimeTrial,
+  onContinue,
   onStartAgain,
   onShowStats,
+  onShowChallenges,
 }: Props) => {
   const currentGenerationLabel =
     generationOptions.find((option) => option.value === generation)?.label ?? 'All generations'
@@ -75,7 +92,7 @@ const MainMenu = ({
         // Replaces the title/subtitle above (this screen has its own Back
         // button in PokedexShell's corner, not here) — sits close to the top
         // rather than inheriting the menu's centered, py-10 feel.
-        <ScreenHeader title="Stats" size="small" />
+        <ScreenHeader title={mode === 'stats' ? 'Stats' : 'Challenges'} size="small" />
       )}
 
       {mode === 'menu' ? (
@@ -135,23 +152,40 @@ const MainMenu = ({
           )}
 
           <div className="flex w-full flex-col gap-2">
-            <button type="button" onClick={onPlay} className={primaryButtonClassName}>
-              <Play className="size-4" aria-hidden="true" />
-              {canContinue ? 'Continue' : 'Play'}
-            </button>
-            {canContinue && (
-              <button type="button" onClick={onStartAgain} className={secondaryButtonClassName}>
-                <RotateCcw className="size-4" aria-hidden="true" />
-                Start again
-              </button>
+            {canContinue ? (
+              <>
+                <button type="button" onClick={onContinue} className={primaryButtonClassName}>
+                  <Play className="size-4" aria-hidden="true" />
+                  Continue
+                </button>
+                <button type="button" onClick={onStartAgain} className={secondaryButtonClassName}>
+                  <RotateCcw className="size-4" aria-hidden="true" />
+                  Start again
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" onClick={onPlayFullDex} className={primaryButtonClassName}>
+                  <Play className="size-4" aria-hidden="true" />
+                  Full Dex
+                </button>
+                <button type="button" onClick={onPlayTimeTrial} className={primaryButtonClassName}>
+                  <Timer className="size-4" aria-hidden="true" />
+                  Time Trial
+                </button>
+              </>
             )}
             <button type="button" onClick={onShowStats} className={secondaryButtonClassName}>
               <Trophy className="size-4" aria-hidden="true" />
               Stats
             </button>
+            <button type="button" onClick={onShowChallenges} className={secondaryButtonClassName}>
+              <Swords className="size-4" aria-hidden="true" />
+              Challenges
+            </button>
           </div>
         </div>
-      ) : (
+      ) : mode === 'stats' ? (
         <div className="flex w-full flex-col gap-2">
           {statsRows.map((row) => {
             // Same amber "new best" treatment RunRecap and the win screen
@@ -180,6 +214,34 @@ const MainMenu = ({
               </div>
             )
           })}
+        </div>
+      ) : (
+        <div className="flex w-full flex-col gap-2">
+          {challengesRows.map((row) => (
+            <div
+              key={row.key}
+              className={`flex items-center justify-between rounded-xl px-4 py-3 ${
+                row.best?.rank === 'S' ? 'bg-best/40 border-lamp-amber border-2' : 'bg-screen-sunk border-2 border-transparent'
+              }`}
+            >
+              <div className="text-left">
+                <p className="text-ink-soft text-xs font-medium">{row.label}</p>
+                <p className="text-ink-soft mt-0.5 text-xs">
+                  {row.attempts === 0 ? 'Not played yet' : `Played ${row.attempts} time${row.attempts === 1 ? '' : 's'}`}
+                </p>
+              </div>
+              {row.best ? (
+                <div className="flex items-center gap-2">
+                  <RankBadge rank={row.best.rank} />
+                  <p className="text-ink-strong text-sm font-semibold tabular-nums">
+                    {formatElapsedMs(row.best.elapsedMs)}
+                  </p>
+                </div>
+              ) : (
+                <p className="text-ink-soft text-lg font-semibold">—</p>
+              )}
+            </div>
+          ))}
         </div>
       )}
     </div>
