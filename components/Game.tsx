@@ -3,11 +3,9 @@
 import { ArrowLeft, Home, Trophy } from 'lucide-react'
 import { useCallback, useEffect, useReducer, useState, useSyncExternalStore } from 'react'
 
-import { guessButtonClassName } from './GuessButton'
-import GuessGrid from './GuessGrid'
 import MainMenu, { type StatsRow } from './MainMenu'
 import PokedexShell from './PokedexShell'
-import PokemonSilhouette from './PokemonSilhouette'
+import RoundView from './RoundView'
 import RunRecap from './RunRecap'
 import ScoreBoard from './ScoreBoard'
 import ScreenHeader from './ScreenHeader'
@@ -18,7 +16,7 @@ import {
   pokemonPoolFor,
   type GenerationFilter,
 } from '@/lib/generations'
-import { getPokemonName, getSpeciesDex } from '@/lib/pokemon'
+import { getPokemonName } from '@/lib/pokemon'
 
 const BEST_STREAK_KEY = 'bestStreak'
 const STREAK_KEY = 'streak'
@@ -37,37 +35,6 @@ const bestStreakKey = (generation: GenerationFilter): string =>
 // prop, so the two never describe the active run's pool differently.
 const generationLabelFor = (generation: GenerationFilter): string =>
   GENERATION_SELECT_OPTIONS.find((option) => option.value === generation)?.label ?? 'All generations'
-
-// createInitialState draws from Math.random, so the state it produces
-// necessarily differs between the server render and the client's first
-// render. Nothing derived from that random state (the silhouette, the
-// revealed name, the guess grid) may be rendered until after mount, or
-// hydration will fail with a text/attribute mismatch. These placeholders
-// reserve the exact same footprint so there is no layout shift once the
-// real, client-only content swaps in.
-const SilhouettePlaceholder = () => (
-  <div className="bg-screen-sunk mx-auto flex size-48 items-center justify-center rounded-full sm:size-56" />
-)
-
-// Each slot holds a skeleton bar rather than sitting empty: four blank boxes
-// read as broken, where a bar reads as "not ready yet". The bar sits inside
-// the same button box, so the slot keeps the exact height of the loaded state.
-const GuessGridPlaceholder = () => (
-  <div className="flex flex-col gap-2">
-    {[0, 1, 2, 3].map((slot) => (
-      // These skeletons are disabled and unlabelled on purpose: they exist to
-      // hold the slot's footprint until the real options arrive. Labelling them
-      // would announce four fake options that cannot be pressed.
-      // oxlint-disable-next-line jsx-a11y/control-has-associated-label
-      <button key={slot} type="button" disabled className={guessButtonClassName('idle')}>
-        <span className="hidden size-5 shrink-0 sm:block" />
-        <span className="flex h-5 items-center">
-          <span className="bg-screen-sunk block h-2.5 w-16 animate-pulse rounded-full" />
-        </span>
-      </button>
-    ))}
-  </div>
-)
 
 // Same amber "new best" treatment RunRecap uses for isNewBest (bg-best/40 +
 // border-lamp-amber), since clearing every Pokémon in the pool is always at
@@ -347,37 +314,16 @@ const Game = () => {
       ) : missedGuess ? (
         <RunRecap {...missedGuess} />
       ) : (
-        <>
-          <div className="mb-3">
-            {mounted ? (
-              <PokemonSilhouette
-                pokemonId={state.pokemonId}
-                roundId={state.roundId}
-                status={state.status}
-                onReady={handleReady}
-              />
-            ) : (
-              <SilhouettePlaceholder />
-            )}
-          </div>
-
-          <p className="text-ink mb-4 h-6 text-center text-sm font-semibold tabular-nums">
-            {revealed ? `#${getSpeciesDex(state.pokemonId)} · ${getPokemonName(state.pokemonId)}` : ' '}
-          </p>
-
-          {mounted && state.status !== 'loading' ? (
-            <GuessGrid
-              options={state.options}
-              answer={state.pokemonId}
-              guess={state.guess}
-              revealed={revealed}
-              disabled={state.status !== 'guessing'}
-              onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
-            />
-          ) : (
-            <GuessGridPlaceholder />
-          )}
-        </>
+        <RoundView
+          mounted={mounted}
+          pokemonId={state.pokemonId}
+          roundId={state.roundId}
+          status={state.status}
+          options={state.options}
+          guess={state.guess}
+          onReady={handleReady}
+          onGuess={(pokemonId) => dispatch({ type: 'GUESS', pokemonId })}
+        />
       )}
 
       <button
